@@ -8,12 +8,15 @@ import pandas as pd
 from utils import initialize, shutdown, get_rates
 from backtest import BacktestEngine
 from logger import logger
-from config import INITIAL_CAPITAL, STRATEGIES, BUY_THRESHOLD, SELL_THRESHOLD
+from config import INITIAL_CAPITAL, SYMBOL, TIMEFRAME, OPTIMIZER_COUNT, OPTIMIZER_START_DATE, OPTIMIZER_END_DATE, USE_DATE_RANGE
+from risk_management import RiskController
+from dynamic_weights import DynamicWeightManager
 
 # 1. 定义适应度函数 (已优化)
 def evaluate_fitness(individual, df_data):
     """
     评估函数现在接收预先加载的DataFrame作为参数，避免了重复IO。
+    使用新的动态权重架构进行评估。
     输入:
     - individual: 一个代表策略权重的列表。
     - df_data: 包含历史K线数据的Pandas DataFrame。
@@ -21,22 +24,33 @@ def evaluate_fitness(individual, df_data):
     """
     weights = individual
 
-    # 直接使用传入的df_data，不再需要get_rates
+    # 使用新的架构进行评估
     engine = BacktestEngine(df_data)
+    
+    # 创建风险管理器和权重管理器
+    risk_controller = RiskController()
+    weight_manager = DynamicWeightManager(risk_controller)
+    
+    # 获取策略实例
+    strategies_with_weights = weight_manager.get_current_strategies_and_weights()
+    
+    # 使用优化器提供的权重替换动态权重
     signals_list = []
-
-    strategy_instances = [s for s, w in STRATEGIES]
-
-    for strat in strategy_instances:
-        signals = engine.run_strategy(strat)
-        signals_list.append(signals)
-
-    combined_signal = engine.combine_signals(signals_list, weights, BUY_THRESHOLD, SELL_THRESHOLD)
+    strategy_names = []
+    
+    for i, (strat, _) in enumerate(strategies_with_weights):
+        if i < len(weights):
+            signals = engine.run_strategy(strat)
+            signals_list.append(signals)
+            strategy_names.append(strat.__class__.__module__)
+    
+    # 使用优化器权重进行组合
+    combined_signal = engine.combine_signals(signals_list, weights[:len(signals_list)])
     cum_ret = engine.calc_returns(combined_signal)
     final_capital = INITIAL_CAPITAL * (1 + cum_ret.iloc[-1])
 
     # 在优化过程中，可以注释掉这行日志以提高速度，因为它会大量输出
-    # logger.info(f"评估权重: {[f'{w:.2f}' for w in weights]} -> 最终资金: {final_capital:.2f}")
+    # logger.info(f"评估权重: {[f'{w:.2f}' for w in weights[:len(signals_list)]]} -> 最终资金: {final_capital:.2f}")
 
     return (final_capital,)
 
@@ -52,10 +66,11 @@ def run_optimizer():
         logger.error("MT5初始化失败，无法开始优化")
         return
 
-    symbol = "XAUUSD"
-    timeframe = 1  # M1
-    count = 50000 # 使用与回测相同的数据量
-    rates = get_rates(symbol, timeframe, count)
+    # 根据配置选择获取数据的方式
+    if USE_DATE_RANGE:
+        rates = get_rates(SYMBOL, TIMEFRAME, OPTIMIZER_COUNT, OPTIMIZER_START_DATE, OPTIMIZER_END_DATE)
+    else:
+        rates = get_rates(SYMBOL, TIMEFRAME, OPTIMIZER_COUNT)
     shutdown() # 获取数据后即可关闭连接
 
     if rates is None:
@@ -72,7 +87,12 @@ def run_optimizer():
 
     toolbox = base.Toolbox()
     toolbox.register("attr_float", random.uniform, 0.1, 2.0)
-    num_strategies = len(STRATEGIES)
+    
+    # 使用动态权重管理器获取策略数量
+    risk_controller = RiskController()
+    weight_manager = DynamicWeightManager(risk_controller)
+    num_strategies = len(weight_manager.list_available_strategies())
+    
     toolbox.register("individual", tools.initRepeat, creator.Individual, toolbox.attr_float, n=num_strategies)
     toolbox.register("population", tools.initRepeat, list, toolbox.individual)
 

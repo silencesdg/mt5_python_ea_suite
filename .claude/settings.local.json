@@ -1,0 +1,12 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(pip show:*)",
+      "Bash(python:*)",
+      "Bash(myenvScriptspython.exe:*)",
+      "Bash(\"D:\\tool\\metaTrader5\\mt5_python_ea_suite\\myenv\\Scripts\\python.exe\":*)",
+      "Bash(D:/tool/metaTrader5/mt5_python_ea_suite/myenv/Scripts/python.exe main.py)"
+    ],
+    "deny": []
+  }
+}

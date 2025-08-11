@@ -2,3 +2,5 @@
 /logs
 /myenv
 __pycache__/
+.json
+.csv

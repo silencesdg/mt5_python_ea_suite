@@ -12,11 +12,55 @@ def initialize():
 def shutdown():
     mt5.shutdown()
 
-def get_rates(symbol, timeframe, count):
-    rates = mt5.copy_rates_from_pos(symbol, timeframe, 0, count)
-    if rates is None:
-        logger.info(f"获取{symbol}历史数据失败")
-        return None
+def get_rates(symbol, timeframe, count, start_date=None, end_date=None):
+    """
+    获取历史数据
+    参数:
+    - symbol: 交易品种
+    - timeframe: 时间周期
+    - count: 数据量 (当start_date和end_date都为None时使用)
+    - start_date: 开始日期 (格式: "YYYY-MM-DD" 或 datetime对象)
+    - end_date: 结束日期 (格式: "YYYY-MM-DD" 或 datetime对象)
+    """
+    if start_date is not None and end_date is not None:
+        # 使用日期范围获取数据
+        import datetime
+        
+        # 转换字符串为datetime对象
+        if isinstance(start_date, str):
+            start_date = datetime.datetime.strptime(start_date, "%Y-%m-%d")
+        if isinstance(end_date, str):
+            end_date = datetime.datetime.strptime(end_date, "%Y-%m-%d")
+        
+        # MetaTrader5需要UTC时间，且copy_rates_range需要timezone-aware的datetime对象
+        # 转换为UTC timezone
+        utc_timezone = datetime.timezone.utc
+        
+        start_utc = start_date.replace(tzinfo=utc_timezone)
+        end_utc = end_date.replace(hour=23, minute=59, second=59, tzinfo=utc_timezone)
+        
+        try:
+            rates = mt5.copy_rates_range(symbol, timeframe, start_utc, end_utc)
+            if rates is None:
+                logger.info(f"获取{symbol}从{start_date.date()}到{end_date.date()}的历史数据失败")
+                return None
+            logger.info(f"成功获取{symbol}从{start_date.date()}到{end_date.date()}的历史数据，共{len(rates)}条")
+        except Exception as e:
+            logger.error(f"使用日期范围获取数据失败: {e}")
+            logger.info("回退到使用数据量获取数据")
+            rates = mt5.copy_rates_from_pos(symbol, timeframe, 0, count)
+            if rates is None:
+                logger.info(f"获取{symbol}历史数据失败")
+                return None
+            logger.info(f"成功获取{symbol}历史数据，共{len(rates)}条")
+    else:
+        # 使用数据量获取数据
+        rates = mt5.copy_rates_from_pos(symbol, timeframe, 0, count)
+        if rates is None:
+            logger.info(f"获取{symbol}历史数据失败")
+            return None
+        logger.info(f"成功获取{symbol}历史数据，共{len(rates)}条")
+    
     return rates
 
 def has_open_position(symbol):
@@ -68,3 +112,12 @@ def send_order(symbol, order_type, volume=0.01):
         logger.error(f"下单失败，retcode={result.retcode}")
     else:
         logger.info(f"下单成功: {order_type} {symbol} {volume}")
+
+def get_current_price(symbol):
+    """获取当前价格"""
+    try:
+        tick = mt5.symbol_info_tick(symbol)
+        return tick.bid if tick else None
+    except Exception as e:
+        logger.error(f"获取当前价格失败: {e}")
+        return None

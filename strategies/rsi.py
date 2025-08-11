@@ -9,8 +9,6 @@ class Strategy:
         self.symbol = "XAUUSD"
         self.timeframe = mt5.TIMEFRAME_M1
         self.rsi_period = 14
-        self.rsi_buy_threshold = 30
-        self.rsi_sell_threshold = 70
 
     def _calculate_indicators(self, df):
         """
@@ -25,8 +23,8 @@ class Strategy:
 
     def generate_signal(self):
         """
-        RSI策略实盘：
-        RSI < 30买入，RSI > 70卖出。
+        RSI策略实盘
+        RSI上穿超卖线买入，下穿超买线卖出
         """
         rates = get_rates(self.symbol, self.timeframe, self.rsi_period + 30)
         if rates is None or len(rates) < self.rsi_period:
@@ -34,26 +32,34 @@ class Strategy:
         df = pd.DataFrame(rates)
         df = self._calculate_indicators(df)
 
-        if df['rsi'].iloc[-2] < self.rsi_buy_threshold:
-            logger.info(f"RSI小于{self.rsi_buy_threshold}，产生买入信号: {self.symbol}")
+        oversold_level = 30
+        overbought_level = 70
+        # RSI crosses above oversold level
+        if df['rsi'].iloc[-2] < oversold_level and df['rsi'].iloc[-1] > oversold_level:
+            logger.info(f"RSI crosses above {oversold_level}, creating buy signal: {self.symbol}")
             return 1
-        elif df['rsi'].iloc[-2] > self.rsi_sell_threshold:
-            logger.info(f"RSI大于{self.rsi_sell_threshold}，产生卖出信号: {self.symbol}")
+        # RSI crosses below overbought level
+        elif df['rsi'].iloc[-2] > overbought_level and df['rsi'].iloc[-1] < overbought_level:
+            logger.info(f"RSI crosses below {overbought_level}, creating sell signal: {self.symbol}")
             return -1
         return 0
 
     def run_backtest(self, df):
         """
-        RSI回测：
-        RSI < 30买入，RSI > 70卖出。
+        RSI回测方法
+        根据RSI穿越超买超卖线生成信号
         """
         df = df.copy()
         df = self._calculate_indicators(df)
 
         signals = pd.Series(0, index=df.index)
-        for i in range(self.rsi_period, len(df)):
-            if df['rsi'].iloc[i-1] < self.rsi_buy_threshold:
+        oversold_level = 30
+        overbought_level = 70
+        for i in range(1, len(df)):
+            # RSI crosses above oversold level
+            if df['rsi'].iloc[i-1] < oversold_level and df['rsi'].iloc[i] > oversold_level:
                 signals.iat[i] = 1
-            elif df['rsi'].iloc[i-1] > self.rsi_sell_threshold:
+            # RSI crosses below overbought level
+            elif df['rsi'].iloc[i-1] > overbought_level and df['rsi'].iloc[i] < overbought_level:
                 signals.iat[i] = -1
         return signals

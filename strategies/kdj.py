@@ -9,9 +9,7 @@ class Strategy:
         self.symbol = "XAUUSD"
         self.timeframe = mt5.TIMEFRAME_M1
         self.kdj_period = 9
-        self.kdj_buy_threshold = 10
-        self.kdj_sell_threshold = 90
-
+    
     def _calculate_indicators(self, df):
         """
         计算KDJ指标
@@ -27,7 +25,7 @@ class Strategy:
     def generate_signal(self):
         """
         KDJ策略实盘
-        J值小于10买入，大于90卖出
+        K线向上穿越D线（金叉）买入，K线向下穿越D线（死叉）卖出
         """
         rates = get_rates(self.symbol, self.timeframe, self.kdj_period + 30)
         if rates is None or len(rates) < self.kdj_period:
@@ -35,26 +33,30 @@ class Strategy:
         df = pd.DataFrame(rates)
         df = self._calculate_indicators(df)
 
-        if df['j'].iloc[-2] < self.kdj_buy_threshold:
-            logger.info(f"J值小于{self.kdj_buy_threshold}，产生买入信号: {self.symbol}")
+        # Golden cross
+        if df['k'].iloc[-2] < df['d'].iloc[-2] and df['k'].iloc[-1] > df['d'].iloc[-1]:
+            logger.info(f"KDJ Golden Cross, creating buy signal: {self.symbol}")
             return 1
-        elif df['j'].iloc[-2] > self.kdj_sell_threshold:
-            logger.info(f"J值大于{self.kdj_sell_threshold}，产生卖出信号: {self.symbol}")
+        # Dead cross
+        elif df['k'].iloc[-2] > df['d'].iloc[-2] and df['k'].iloc[-1] < df['d'].iloc[-1]:
+            logger.info(f"KDJ Dead Cross, creating sell signal: {self.symbol}")
             return -1
         return 0
 
     def run_backtest(self, df):
         """
         KDJ回测方法
-        根据J值极端生成信号
+        根据金叉和死叉生成信号
         """
         df = df.copy()
         df = self._calculate_indicators(df)
 
         signals = pd.Series(0, index=df.index)
-        for i in range(self.kdj_period, len(df)):
-            if df['j'].iloc[i-1] < self.kdj_buy_threshold:
+        for i in range(1, len(df)):
+            # Golden cross
+            if df['k'].iloc[i-1] < df['d'].iloc[i-1] and df['k'].iloc[i] > df['d'].iloc[i]:
                 signals.iat[i] = 1
-            elif df['j'].iloc[i-1] > self.kdj_sell_threshold:
+            # Dead cross
+            elif df['k'].iloc[i-1] > df['d'].iloc[i-1] and df['k'].iloc[i] < df['d'].iloc[i]:
                 signals.iat[i] = -1
         return signals
