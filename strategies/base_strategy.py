@@ -15,6 +15,15 @@ class BaseStrategy:
         self.timeframe = timeframe
         self.name = self.__class__.__name__
         
+    def set_params(self, params):
+        """动态设置策略参数"""
+        for key, value in params.items():
+            if hasattr(self, key):
+                setattr(self, key, value)
+                logger.debug(f"{self.name}: 参数 '{key}' 已更新为 {value}")
+            else:
+                logger.warning(f"{self.name}: 尝试设置不存在的参数 '{key}'")
+
     def _log_signal(self, signal, reason=None):
         """记录信号日志"""
         if signal != 0:

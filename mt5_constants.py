@@ -1,0 +1,28 @@
+"""
+MT5常量定义文件
+避免在config.py中直接导入MetaTrader5
+"""
+
+# MT5时间周期常量
+TIMEFRAME_M1 = 1      # 1分钟
+TIMEFRAME_M5 = 5      # 5分钟
+TIMEFRAME_M15 = 15    # 15分钟
+TIMEFRAME_M30 = 30    # 30分钟
+TIMEFRAME_H1 = 16385  # 1小时
+TIMEFRAME_H4 = 16388  # 4小时
+TIMEFRAME_D1 = 16408  # 1天
+TIMEFRAME_W1 = 32769  # 1周
+TIMEFRAME_MN1 = 49153 # 1月
+
+# 常用时间周期映射
+TIMEFRAME_MAP = {
+    'M1': TIMEFRAME_M1,
+    'M5': TIMEFRAME_M5,
+    'M15': TIMEFRAME_M15,
+    'M30': TIMEFRAME_M30,
+    'H1': TIMEFRAME_H1,
+    'H4': TIMEFRAME_H4,
+    'D1': TIMEFRAME_D1,
+    'W1': TIMEFRAME_W1,
+    'MN1': TIMEFRAME_MN1,
+}

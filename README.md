@@ -40,6 +40,7 @@ mt5_python_ea_suite/
 │   ├── wave_theory.py            # 波浪理论策略
 │   └── base_strategy.py          # 策略基类
 ├── config.py                     # 配置文件
+├── mt5_constants.py              # MT5常量定义
 ├── main.py                       # 主入口（优化器）
 ├── start_backtest.py            # 回测启动脚本
 ├── start_realtime.py            # 实时交易启动脚本
@@ -86,20 +87,75 @@ mt5_python_ea_suite/
 ## 🎯 策略说明
 
 ### 技术指标策略
-- **均线交叉 (MACrossStrategy)**: 基于快慢均线交叉的买卖信号
-- **相对强弱指数 (RSIStrategy)**: 使用RSI指标判断超买超卖
-- **布林带 (BollingerStrategy)**: 基于价格与布林带的相对位置
-- **MACD策略**: MACD指标的金叉死叉信号
-- **KDJ策略**: KDJ指标的超买超卖信号
+- **均线交叉 (MACrossStrategy)**: 基于快慢均线交叉的买卖信号，需要 `long_window + 5` 条数据（默认25条）
+- **相对强弱指数 (RSIStrategy)**: 使用RSI指标判断超买超卖，需要 `period + 10` 条数据（默认24条）
+- **布林带 (BollingerStrategy)**: 基于价格与布林带的相对位置，需要 `period + 5` 条数据（默认25条）
+- **MACD策略**: MACD指标的金叉死叉信号，需要 `slow_ema + signal_period + 5` 条数据（默认40条）
+- **KDJ策略**: KDJ指标的超买超卖信号，需要 `period + 5` 条数据（默认19条）
 
 ### 价格行为策略
-- **海龟交易法则 (TurtleStrategy)**: 基于价格突破的顺势交易
-- **均值回归 (MeanReversionStrategy)**: 价格偏离均值时的回归交易
-- **动量突破 (MomentumBreakoutStrategy)**: 基于动量指标的突破信号
-- **日内突破 (DailyBreakoutStrategy)**: 基于日内价格区间的突破
+- **海龟交易法则 (TurtleStrategy)**: 基于价格突破的顺势交易，需要 `period + 2` 条数据（默认22条）
+- **均值回归 (MeanReversionStrategy)**: 价格偏离均值时的回归交易，需要 `period + 5` 条数据（默认25条）
+- **动量突破 (MomentumBreakoutStrategy)**: 基于动量指标的突破信号，需要 `period + 2` 条数据（默认22条）
+- **日内突破 (DailyBreakoutStrategy)**: 基于日内价格区间的突破，需要 `bars_count` 条数据（默认1440条，即1天的1分钟数据）
 
 ### 复杂策略
-- **波浪理论 (WaveTheoryStrategy)**: 结合EMA、ADX、动量等多指标的趋势分析
+- **波浪理论 (WaveTheoryStrategy)**: 结合EMA、ADX、动量等多指标的趋势分析，需要 `m1_bars_count` 条数据（默认500条）
+
+## 📊 策略数据需求总结
+
+| 策略名称 | 最小数据量 | 默认参数 | 主要用途 |
+|---------|-----------|---------|---------|
+| MACrossStrategy | long_window + 5 | 25 | 趋势跟踪 |
+| RSIStrategy | period + 10 | 24 | 超买超卖 |
+| BollingerStrategy | period + 5 | 25 | 波动性交易 |
+| MACDStrategy | slow_ema + signal_period + 5 | 40 | 趋势确认 |
+| KDJStrategy | period + 5 | 19 | 超买超卖 |
+| TurtleStrategy | period + 2 | 22 | 突破交易 |
+| MeanReversionStrategy | period + 5 | 25 | 均值回归 |
+| MomentumBreakoutStrategy | period + 2 | 22 | 动量突破 |
+| DailyBreakoutStrategy | bars_count | 1440 | 日内交易 |
+| WaveTheoryStrategy | m1_bars_count | 500 | 综合分析 |
+
+**注意**: 系统运行时会自动获取所需数据量，建议配置回测数据量时考虑最大需求的策略（DailyBreakoutStrategy需要1440条）。
+
+## 📈 数据获取确认
+
+### 数据频率确认
+- **时间周期**: `TIMEFRAME = TIMEFRAME_M1` (1分钟K线数据)
+- **常量定义**: 使用MT5标准时间周期常量 (`mt5_constants.py`)
+- **数据来源**: MT5服务器实时数据
+- **数据格式**: 包含OHLC价格、成交量、点差等信息
+
+### MT5时间周期常量
+系统使用标准MT5时间周期常量：
+- `TIMEFRAME_M1 = 1` (1分钟)
+- `TIMEFRAME_M5 = 5` (5分钟)
+- `TIMEFRAME_M15 = 15` (15分钟)
+- `TIMEFRAME_M30 = 30` (30分钟)
+- `TIMEFRAME_H1 = 16385` (1小时)
+- `TIMEFRAME_H4 = 16388` (4小时)
+- `TIMEFRAME_D1 = 16408` (1天)
+- `TIMEFRAME_W1 = 32769` (1周)
+- `TIMEFRAME_MN1 = 49153` (1月)
+
+### 实际数据验证
+经过测试确认：
+- 25条数据 = 24分钟历史数据
+- 40条数据 = 39分钟历史数据  
+- 1440条数据 = 1509分钟历史数据（约25小时）
+- 5000条数据 = 8159分钟历史数据（约136小时）
+
+### 数据字段说明
+每条1分钟K线数据包含：
+- `time`: 时间戳
+- `open`: 开盘价
+- `high`: 最高价
+- `low`: 最低价
+- `close`: 收盘价
+- `tick_volume`: 成交量
+- `spread`: 点差
+- `real_volume`: 实际成交量
 
 ## 🚦 运行模式
 

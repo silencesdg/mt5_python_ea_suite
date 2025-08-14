@@ -287,7 +287,7 @@ def evaluate_fitness(individual, df_data):
     # 获取风险管理参数
     risk_params = {
         'stop_loss_pct': parsed_params.get('stop_loss_pct', RISK_CONFIG.get('stop_loss_pct', -0.01)),
-        'profit_retracement_pct': parsed_params.get('profit_retracement_pct', RISK_CONFIG.get('profit_retracement_pct', 0.10)),
+        'profit_retracement_pct': parsed_params.get('profit_retracement_pct', .get('profit_retracement_pct', 0.10)),
         'min_profit_for_trailing': parsed_params.get('min_profit_for_trailing', RISK_CONFIG.get('min_profit_for_trailing', 0.01)),
         'take_profit_pct': parsed_params.get('take_profit_pct', RISK_CONFIG.get('take_profit_pct', 0.20)),
         'max_holding_minutes': parsed_params.get('max_holding_minutes', RISK_CONFIG.get('max_holding_minutes', 60)),

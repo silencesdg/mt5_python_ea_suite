@@ -1,29 +1,39 @@
 import pandas as pd
 import numpy as np
 from logger import logger
-from config import MARKET_STATE_CONFIG, SYMBOL, DEFAULT_WEIGHTS, TREND_INDICATOR_WEIGHTS, TREND_THRESHOLDS, MARKET_STATE_WEIGHTS, CONFIDENCE_THRESHOLDS
+from mt5_constants import TIMEFRAME_H1
+# Removed: from config import MARKET_STATE_CONFIG, SYMBOL, DEFAULT_WEIGHTS, TREND_INDICATOR_WEIGHTS, TREND_THRESHOLDS, MARKET_STATE_WEIGHTS, CONFIDENCE_THRESHOLDS
 
 class MarketStateAnalyzer:
     """
-    市场状态分析器 (支持参数优化)
+    市场状态分析器 (已移除对外部配置的依赖)
     """
     
-    def __init__(self, data_provider, market_state_params=None, trend_weights=None, trend_thresholds=None, confidence_thresholds=None):
+    def __init__(self, data_provider):
         self.data_provider = data_provider
-        self.symbol = SYMBOL
-        self.timeframe = 16385 # TIMEFRAME_H1
+        self.symbol = "XAUUSD" # Hardcoded SYMBOL, as it's no longer imported from config
+        self.timeframe = TIMEFRAME_H1
         self.hourly_data_count = 100
         
-        # 使用传入的参数或默认配置
-        market_state_config = market_state_params or MARKET_STATE_CONFIG
-        self.trend_period = market_state_config.get("trend_period", 50)
-        self.retracement_tolerance = market_state_config.get("retracement_tolerance", 0.30)
-        self.volume_period = market_state_config.get("volume_period", 20)
-        self.volume_ma_period = market_state_config.get("volume_ma_period", 10)
+        # Hardcoded default parameters (from original config.py values)
+        self.trend_period = 50 # From MARKET_STATE_CONFIG.get("trend_period", 50)
+        self.retracement_tolerance = 0.30 # From MARKET_STATE_CONFIG.get("retracement_tolerance", 0.30)
+        self.volume_period = 20 # From MARKET_STATE_CONFIG.get("volume_period", 20)
+        self.volume_ma_period = 10 # From MARKET_STATE_CONFIG.get("volume_ma_period", 10)
         
-        self.indicator_weights = trend_weights or TREND_INDICATOR_WEIGHTS
-        self.thresholds = trend_thresholds or TREND_THRESHOLDS
-        self.confidence_thresholds = confidence_thresholds or CONFIDENCE_THRESHOLDS
+        self.indicator_weights = { # From TREND_INDICATOR_WEIGHTS
+            "price_breakout": 0.35,
+            "volume_confirmation": 0.25,
+            "momentum oscillator": 0.20,
+            "moving_average": 0.20
+        }
+        self.thresholds = { # From TREND_THRESHOLDS
+            "strong_trend": 0.6,
+            "weak_trend": 0.3,
+            "volume_spike": 1.5,
+            "oversold": 30,
+            "overbought": 70
+        }
         
         self.current_trend = "none"
         self.trend_peak = 0.0
@@ -136,16 +146,3 @@ class MarketStateAnalyzer:
         
         self._update_trend_state(df, state)
         return state, confidence
-
-    def get_strategy_weights(self, market_state, confidence):
-        base_weights = MARKET_STATE_WEIGHTS.get(market_state, DEFAULT_WEIGHTS)
-        
-        high_confidence_threshold = self.confidence_thresholds.get("high_confidence", 0.7)
-        medium_confidence_threshold = self.confidence_thresholds.get("medium_confidence", 0.4)
-        
-        if confidence > high_confidence_threshold:
-            return {k: v * confidence for k, v in base_weights.items()}
-        elif confidence > medium_confidence_threshold:
-            return {k: (v * confidence + DEFAULT_WEIGHTS.get(k, 1.0) * (1 - confidence)) for k, v in base_weights.items()}
-        else:
-            return DEFAULT_WEIGHTS

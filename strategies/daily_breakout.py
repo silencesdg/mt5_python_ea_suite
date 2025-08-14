@@ -38,13 +38,16 @@ class DailyBreakoutStrategy(BaseStrategy):
 
     def run_backtest(self, df):
         df = df.copy()
-        df['time'] = pd.to_datetime(df['time'], unit='s')
-        df['date'] = df['time'].dt.date
+        # BUG FIX: The 'time' column does not exist in a properly formed dataframe.
+        # Time information should be derived from the DatetimeIndex.
+        df['date'] = df.index.date
         
+        # LOGIC FIX: daily_lows should be the minimum of the day, not the maximum.
         daily_highs = df.groupby('date')['high'].transform('max')
-        daily_lows = df.groupby('date')['low'].transform('max')
+        daily_lows = df.groupby('date')['low'].transform('min')
 
         signals = pd.Series(0, index=df.index)
+        # Signal when close breaks yesterday's high/low
         signals[df['close'] > daily_highs.shift(1)] = 1
         signals[df['close'] < daily_lows.shift(1)] = -1
         return signals

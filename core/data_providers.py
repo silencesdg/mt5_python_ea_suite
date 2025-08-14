@@ -77,6 +77,7 @@ class LiveDataProvider(DataProvider):
             return None
 
     def get_historical_data(self, symbol, timeframe, count, **kwargs):
+        # 确保使用MT5标准常量
         return mt5.copy_rates_from_pos(symbol, timeframe, 0, count)
 
     def get_account_info(self):
