@@ -1,65 +1,62 @@
-import MetaTrader5 as mt5
 import pandas as pd
-from utils import get_rates, close_all, send_order
-from logger import logger
+from .base_strategy import BaseStrategy
+from config import STRATEGY_CONFIG
 
-
-class Strategy:
-    def __init__(self):
-        self.symbol = "XAUUSD"
-        self.timeframe = mt5.TIMEFRAME_M1
-        self.rsi_period = 14
-
-    def _calculate_indicators(self, df):
-        """
-        计算RSI指标
-        """
-        delta = df['close'].diff()
-        gain = delta.where(delta > 0, 0).rolling(self.rsi_period).mean()
-        loss = -delta.where(delta < 0, 0).rolling(self.rsi_period).mean()
-        rs = gain / loss
-        df['rsi'] = 100 - (100 / (1 + rs))
-        return df
+class RSIStrategy(BaseStrategy):
+    def __init__(self, data_provider, symbol, timeframe, period=None, overbought=None, oversold=None):
+        super().__init__(data_provider, symbol, timeframe)
+        # 从配置中获取参数，如果传入参数则使用传入的参数
+        config = STRATEGY_CONFIG.get('rsi', {})
+        self.period = period if period is not None else config.get('period', 14)
+        self.overbought = overbought if overbought is not None else config.get('overbought', 70)
+        self.oversold = oversold if oversold is not None else config.get('oversold', 30)
 
     def generate_signal(self):
-        """
-        RSI策略实盘
-        RSI上穿超卖线买入，下穿超买线卖出
-        """
-        rates = get_rates(self.symbol, self.timeframe, self.rsi_period + 30)
-        if rates is None or len(rates) < self.rsi_period:
+        rates = self.data_provider.get_historical_data(self.symbol, self.timeframe, self.period + 10) # Get more data for stability
+        if rates is None or len(rates) < self.period + 1:
             return 0
-        df = pd.DataFrame(rates)
-        df = self._calculate_indicators(df)
 
-        oversold_level = 30
-        overbought_level = 70
-        # RSI crosses above oversold level
-        if df['rsi'].iloc[-2] < oversold_level and df['rsi'].iloc[-1] > oversold_level:
-            logger.info(f"RSI crosses above {oversold_level}, creating buy signal: {self.symbol}")
-            return 1
-        # RSI crosses below overbought level
-        elif df['rsi'].iloc[-2] > overbought_level and df['rsi'].iloc[-1] < overbought_level:
-            logger.info(f"RSI crosses below {overbought_level}, creating sell signal: {self.symbol}")
+        df = pd.DataFrame(rates)
+        delta = df['close'].diff()
+        gain = (delta.where(delta > 0, 0)).rolling(window=self.period).mean()
+        loss = (-delta.where(delta < 0, 0)).rolling(window=self.period).mean()
+        
+        rs = gain / loss
+        rsi = 100 - (100 / (1 + rs))
+        
+        latest_rsi = rsi.iloc[-1]
+
+        if latest_rsi > self.overbought:
             return -1
+        
+        if latest_rsi < self.oversold:
+            return 1
+            
         return 0
 
     def run_backtest(self, df):
         """
-        RSI回测方法
-        根据RSI穿越超买超卖线生成信号
+        为RSI策略生成回测信号的向量化方法。
         """
         df = df.copy()
-        df = self._calculate_indicators(df)
+        # 计算价格变化
+        delta = df['close'].diff()
+        
+        # 分别计算上涨和下跌
+        gain = delta.where(delta > 0, 0)
+        loss = -delta.where(delta < 0, 0)
+        
+        # 使用指数移动平均（EMA）计算平均增益和损失，这是RSI的标准算法
+        avg_gain = gain.ewm(com=self.period - 1, min_periods=self.period).mean()
+        avg_loss = loss.ewm(com=self.period - 1, min_periods=self.period).mean()
 
+        # 计算RSI
+        rs = avg_gain / avg_loss
+        rsi = 100 - (100 / (1 + rs))
+
+        # 根据超买超卖阈值生成信号
         signals = pd.Series(0, index=df.index)
-        oversold_level = 30
-        overbought_level = 70
-        for i in range(1, len(df)):
-            # RSI crosses above oversold level
-            if df['rsi'].iloc[i-1] < oversold_level and df['rsi'].iloc[i] > oversold_level:
-                signals.iat[i] = 1
-            # RSI crosses below overbought level
-            elif df['rsi'].iloc[i-1] > overbought_level and df['rsi'].iloc[i] < overbought_level:
-                signals.iat[i] = -1
+        signals[rsi > self.overbought] = -1  # 超买区域，产生卖出信号
+        signals[rsi < self.oversold] = 1    # 超卖区域，产生买入信号
+        
         return signals

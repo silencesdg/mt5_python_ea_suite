@@ -1,3 +1,4 @@
 MetaTrader5
 pandas
 deap
+tqdm

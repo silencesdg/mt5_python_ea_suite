@@ -1,0 +1,97 @@
+import MetaTrader5 as mt5
+
+# 登录账号
+ACCOUNT = 12345678
+PASSWORD = "your_password"
+SERVER = "Exness-MT5Trial"  # 服务器名称
+SYMBOL = "EURUSD"
+
+# 初始化
+if not mt5.initialize():
+    print("initialize() failed:", mt5.last_error())
+    quit()
+
+if not mt5.login(ACCOUNT, PASSWORD, SERVER):
+    print("login() failed:", mt5.last_error())
+    mt5.shutdown()
+    quit()
+
+# 获取当前持仓
+positions = mt5.positions_get(symbol=SYMBOL)
+if positions is None or len(positions) == 0:
+    print(f"没有 {SYMBOL} 的持仓")
+    mt5.shutdown()
+    quit()
+
+# 遍历并平仓
+for pos in positions:
+    ticket = pos.ticket
+    lot = pos.volume
+    position_type = pos.type  # 0=BUY, 1=SELL
+
+    if position_type == mt5.POSITION_TYPE_BUY:
+        # 平多 -> 发送SELL订单
+        close_request = {
+            "action": mt5.TRADE_ACTION_DEAL,
+            "symbol": SYMBOL,
+            "volume": lot,
+            "type": mt5.ORDER_TYPE_SELL,
+            "position": ticket,
+            "price": mt5.symbol_info_tick(SYMBOL).bid,
+            "deviation": 10,
+            "magic": 234000,
+            "comment": "Python Close Buy",
+            "type_filling": mt5.ORDER_FILLING_IOC,
+        }
+    else:
+        # 平空 -> 发送BUY订单
+        close_request = {
+            "action": mt5.TRADE_ACTION_DEAL,
+            "symbol": SYMBOL,
+            "volume": lot,
+            "type": mt5.ORDER_TYPE_BUY,
+            "position": ticket,
+            "price": mt5.symbol_info_tick(SYMBOL).ask,
+            "deviation": 10,
+            "magic": 234000,
+            "comment": "Python Close Sell",
+            "type_filling": mt5.ORDER_FILLING_IOC,
+        }
+
+    result = mt5.order_send(close_request)
+    print(result)
+    if result.retcode != mt5.TRADE_RETCODE_DONE:
+        print(f"平仓失败: {result.comment}, 错误码: {result.retcode}")
+
+mt5.shutdown()
+
+'''
+2️⃣ 常见平仓失败原因
+未传 position 参数
+
+在 MT5 里，如果是平仓，你必须指定 原单的 ticket ID（即 position 字段）。
+
+不然系统会认为你是开新仓，而不是平仓。
+
+价格方向不对
+
+平多必须用 SELL，平空必须用 BUY，价格要对应 bid 或 ask。
+
+多单平仓价用 Bid（卖给市场），空单平仓价用 Ask（买回）。
+
+lot 不匹配
+
+发送的 volume 必须和剩余仓位量一致（或等于合约最小手数的整数倍）。
+
+有些券商要求精确到 2~3 位小数，否则 Invalid volume。
+
+订单类型与服务器支持不符
+
+type_filling 要用服务器支持的方式（常见 ORDER_FILLING_IOC）。
+
+有些外汇服务器不支持 FOK。
+
+symbol 没有准备好
+
+必须 mt5.symbol_select(SYMBOL, True)，并且 symbol_info_tick() 不为 None。
+'''

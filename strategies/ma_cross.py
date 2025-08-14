@@ -1,56 +1,60 @@
-import MetaTrader5 as mt5
 import pandas as pd
-from utils import get_rates, close_all, send_order
+from .base_strategy import BaseStrategy
 from logger import logger
+from config import STRATEGY_CONFIG
 
-
-class Strategy:
-    def __init__(self):
-        self.symbol = "XAUUSD"
-        self.timeframe = mt5.TIMEFRAME_M1
-        self.fast_ma_period = 5
-        self.slow_ma_period = 20
-
-    def _calculate_indicators(self, df):
-        """
-        计算技术指标
-        """
-        df['fast_ma'] = df['close'].rolling(self.fast_ma_period).mean()
-        df['slow_ma'] = df['close'].rolling(self.slow_ma_period).mean()
-        return df
+class MACrossStrategy(BaseStrategy):
+    def __init__(self, data_provider, symbol, timeframe, short_window=None, long_window=None):
+        super().__init__(data_provider, symbol, timeframe)
+        # 从配置中获取参数，如果传入参数则使用传入的参数
+        config = STRATEGY_CONFIG.get('ma_cross', {})
+        self.short_window = short_window if short_window is not None else config.get('short_window', 5)
+        self.long_window = long_window if long_window is not None else config.get('long_window', 20)
 
     def generate_signal(self):
-        """
-        均线交叉策略实盘：
-        短期均线上穿长期均线买入，下穿卖出。
-        """
-        rates = get_rates(self.symbol, self.timeframe, self.slow_ma_period + 30)
-        if rates is None or len(rates) < self.slow_ma_period:
+        logger.debug(f"--- {self.name} 信号生成开始 ---")
+        rates = self.data_provider.get_historical_data(self.symbol, self.timeframe, self.long_window + 5) # 获取更多数据以防万一
+        
+        if rates is None or len(rates) < self.long_window + 1:
+            logger.debug(f"数据不足或获取失败。需要: {self.long_window + 1}, 实际: {len(rates) if rates is not None else 0}")
             return 0
+        
+        logger.debug(f"获取到 {len(rates)} 条数据")
         df = pd.DataFrame(rates)
-        df = self._calculate_indicators(df)
+        
+        # 计算移动平均线
+        df['short_ma'] = df['close'].rolling(window=self.short_window).mean()
+        df['long_ma'] = df['close'].rolling(window=self.long_window).mean()
+        
+        # 提取最后两条数据用于判断
+        latest = df.iloc[-1]
+        previous = df.iloc[-2]
 
-        if df['fast_ma'].iloc[-2] > df['slow_ma'].iloc[-2] and df['fast_ma'].iloc[-3] <= df['slow_ma'].iloc[-3]:
-            logger.info(f"短期均线上穿长期均线，产生买入信号: {self.symbol}")
+        logger.debug(f"最新数据点: Close={latest['close']}, Short MA={latest['short_ma']:.2f}, Long MA={latest['long_ma']:.2f}")
+        logger.debug(f"前一数据点: Close={previous['close']}, Short MA={previous['short_ma']:.2f}, Long MA={previous['long_ma']:.2f}")
+
+        # 判断金叉
+        is_cross_up = latest['short_ma'] > latest['long_ma'] and previous['short_ma'] <= previous['long_ma']
+        logger.debug(f"金叉判断 (is_cross_up): {is_cross_up}")
+        if is_cross_up:
+            logger.info(f"{self.name}: 检测到金叉，生成买入信号")
             return 1
-        elif df['fast_ma'].iloc[-2] < df['slow_ma'].iloc[-2] and df['fast_ma'].iloc[-3] >= df['slow_ma'].iloc[-3]:
-            logger.info(f"短期均线下穿长期均线，产生卖出信号: {self.symbol}")
+        
+        # 判断死叉
+        is_cross_down = latest['short_ma'] < latest['long_ma'] and previous['short_ma'] >= previous['long_ma']
+        logger.debug(f"死叉判断 (is_cross_down): {is_cross_down}")
+        if is_cross_down:
+            logger.info(f"{self.name}: 检测到死叉，生成卖出信号")
             return -1
+            
+        logger.debug(f"--- {self.name} 信号生成结束 (无信号) ---")
         return 0
 
     def run_backtest(self, df):
-        """
-        均线交叉回测：
-        短期均线和长期均线交叉产生信号
-        """
         df = df.copy()
-        df = self._calculate_indicators(df)
-
+        df['short_ma'] = df['close'].rolling(window=self.short_window).mean()
+        df['long_ma'] = df['close'].rolling(window=self.long_window).mean()
         signals = pd.Series(0, index=df.index)
-        # 从 slow_ma_period 开始循环，避免早期数据 NaN 问题
-        for i in range(self.slow_ma_period, len(df)):
-            if df['fast_ma'].iloc[i-1] > df['slow_ma'].iloc[i-1] and df['fast_ma'].iloc[i-2] <= df['slow_ma'].iloc[i-2]:
-                signals.iat[i] = 1
-            elif df['fast_ma'].iloc[i-1] < df['slow_ma'].iloc[i-1] and df['fast_ma'].iloc[i-2] >= df['slow_ma'].iloc[i-2]:
-                signals.iat[i] = -1
+        signals[(df['short_ma'] > df['long_ma']) & (df['short_ma'].shift(1) <= df['long_ma'].shift(1))] = 1
+        signals[(df['short_ma'] < df['long_ma']) & (df['short_ma'].shift(1) >= df['long_ma'].shift(1))] = -1
         return signals

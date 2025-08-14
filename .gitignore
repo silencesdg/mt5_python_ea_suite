@@ -2,5 +2,9 @@
 /logs
 /myenv
 __pycache__/
-.json
-.csv
+*.json
+*.csv
+.claude/
+.claude/**
+.claude/settings.local.json
+.claude/
