@@ -83,7 +83,7 @@ class RealtimeTrader:
                 else:
                     logger.info(f"{direction}交易执行成功")
             
-            self.risk_controller.monitor_positions(current_price)
+            self.risk_controller.monitor_positions(current_price, weighted_signal=weighted_signal_sum)
 
             # --- 状态汇总日志 ---
             logger.info("--- 财务状况更新 ---")

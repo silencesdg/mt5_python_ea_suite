@@ -3,12 +3,15 @@ SERVER_HOST = "0.0.0.0"
 SERVER_PORT = 5555
 
 # 远端客户端配置（迁移到其他电脑时填写 MT5 机器的 IP）
-REMOTE_SERVER_HOST = "127.0.0.1"
+REMOTE_SERVER_HOST = "192.168.1.5"
 REMOTE_SERVER_PORT = 5555
+
+# 数据提供者模式: "remote" (远程HTTP API) / "local" (本机MT5)
+DATA_PROVIDER_MODE = "remote"
 
 # 交易配置
 SYMBOL = "XAUUSDz"
-INITIAL_CAPITAL = 1937  # 初始资金（2026-05-11 实盘余额）
+INITIAL_CAPITAL = 1944  # 初始资金（2026-05-12 实盘余额 $1944.27）
 
 # 时间配置
 TIMEFRAME = 1# M1 (1分钟图) - MT5常量值
@@ -66,6 +69,26 @@ REALTIME_CONFIG = {
     "dry_run": False,                 # 是否为模拟运行（不实际下单）
     "logging_level": "DEBUG",         # 日志级别
     "trade_direction": "both",       # 交易方向: "long"(只做多), "short"(只做空), "both"(多空都支持)
+}
+
+# 对冲配置（信号对冲 + 回撤锁仓）
+HEDGE_CONFIG = {
+    # ── 信号对冲 ──
+    "signal_hedge_enabled": True,       # 启用信号对冲
+    "signal_hedge_threshold": 2.0,      # 加权信号绝对值超此值触发对冲
+    "signal_hedge_ratio": 0.5,          # 对冲手数比例 (0.5=半仓对冲)
+    "signal_unhedge_threshold": 1.0,    # 信号回到此值以下解锁
+
+    # ── 回撤锁仓 ──
+    "drawdown_hedge_enabled": True,     # 启用回撤锁仓
+    "drawdown_hedge_pct": -0.003,       # 浮亏超-0.3%触发锁仓
+    "drawdown_hedge_ratio": 1.0,        # 锁仓比例 (1.0=全额锁仓)
+
+    # ── 对冲单止盈 ──
+    "hedge_take_profit_pct": 0.005,     # 对冲单自身盈利0.5%止盈
+
+    # ── 风控限制 ──
+    "max_hedges_per_day": 5,            # 每日最多对冲5次
 }
 
 

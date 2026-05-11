@@ -1,5 +1,6 @@
 from core.risk.market_state import MarketStateAnalyzer
 from core.risk.position import PositionManager
+from logger import logger
 
 
 class RiskController:
@@ -16,8 +17,11 @@ class RiskController:
     def process_trading_signal(self, direction, current_price, signal_strength=0.0):
         return self.position_manager.open_position(direction, current_price, signal_strength)
 
-    def monitor_positions(self, current_price, dry_run=False):
-        self.position_manager.monitor_positions(current_price, dry_run)
+    def monitor_positions(self, current_price, dry_run=False, weighted_signal=0.0):
+        self.position_manager.monitor_positions(current_price, dry_run, weighted_signal)
+        # 对冲摘要日志
+        if self.position_manager.hedge_manager and self.position_manager.hedge_manager.active_hedges > 0:
+            logger.info(f"🔒 活跃对冲: {self.position_manager.hedge_manager.active_hedges} 个")
 
     def sync_state(self):
         self.position_manager.update_equity()

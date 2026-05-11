@@ -8,6 +8,7 @@ from config import (
     RISK_CONFIG_CONST, SIMULATION_CONFIG
 )
 from core.risk.exit_rules import ExitRuleEngine, ExitContext
+from core.risk.hedge import HedgeManager
 
 
 class PositionManager:
@@ -69,6 +70,10 @@ class PositionManager:
         self.peak_data_file = "position_peaks.json"
         if self._persist_peaks:
             self._load_peak_data()
+
+        # 对冲管理器
+        from config import HEDGE_CONFIG
+        self.hedge_manager = HedgeManager(self, HEDGE_CONFIG)
 
     # ── 仓位计算 ──
 
@@ -180,7 +185,7 @@ class PositionManager:
 
     # ── 持仓监控 ──
 
-    def monitor_positions(self, current_price, dry_run=False):
+    def monitor_positions(self, current_price, dry_run=False, weighted_signal=0.0):
         if not self.positions:
             return
 
@@ -230,6 +235,15 @@ class PositionManager:
             self._cooldown_counter = self.cooldown_bars
             self.update_equity()
             self.cleanup_peak_data()
+
+        # ── 对冲评估 ──
+        if self.positions and self.hedge_manager:
+            hedge_actions = self.hedge_manager.evaluate(weighted_signal, current_price)
+            for action, target, reason in hedge_actions:
+                if action == "hedge":
+                    self.hedge_manager.execute_hedge(target, reason, current_price)
+                elif action == "unhedge":
+                    self.hedge_manager.execute_unhedge(target, reason)
 
     # ── 盈亏计算 ──
 
