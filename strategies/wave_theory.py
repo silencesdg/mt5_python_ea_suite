@@ -36,8 +36,9 @@ class WaveTheoryStrategy(BaseStrategy):
 
     def _identify_wave_points(self, df):
         window_size = self.wave_period * 2 + 1
-        df['local_high'] = df['high'].rolling(window=window_size, center=False).max().shift(-self.wave_period)
-        df['local_low'] = df['low'].rolling(window=window_size, center=False).min().shift(-self.wave_period)
+        # 纯后向窗口，不使用 shift 避免未来函数
+        df['local_high'] = df['high'].rolling(window=window_size, center=False).max()
+        df['local_low'] = df['low'].rolling(window=window_size, center=False).min()
         wave_points = pd.Series(0, index=df.index)
         wave_points[df['high'] == df['local_high']] = 1
         wave_points[df['low'] == df['local_low']] = -1
@@ -109,12 +110,13 @@ class WaveTheoryStrategy(BaseStrategy):
             if current_price > upper_bound * 0.98 and current_momentum < 0: return -1
             elif current_price < lower_bound * 1.02 and current_momentum > 0: return 1
         else:
-            ema_alignment = (df['ema_short'].iloc[-1] > df['ema_medium'].iloc[-1] > df['ema_long'].iloc[-1])
+            ema_bullish = (df['ema_short'].iloc[-1] > df['ema_medium'].iloc[-1] > df['ema_long'].iloc[-1])
+            ema_bearish = (df['ema_short'].iloc[-1] < df['ema_medium'].iloc[-1] < df['ema_long'].iloc[-1])
             if f'fib_0.618' in df.columns and not pd.isna(df[f'fib_0.618'].iloc[-1]):
                 fib_618 = df[f'fib_0.618'].iloc[-1]
                 if abs(current_price - fib_618) / fib_618 < 0.01:
-                    if ema_alignment and current_momentum > 0: return 1
-                    elif not ema_alignment and current_momentum < 0: return -1
+                    if ema_bullish and current_momentum > 0: return 1
+                    elif ema_bearish and current_momentum < 0: return -1
         return 0
 
     def run_backtest(self, df):
@@ -132,10 +134,11 @@ class WaveTheoryStrategy(BaseStrategy):
                 if current_price > upper_bound * 0.98 and current_momentum < 0: signals.iat[i] = -1
                 elif current_price < lower_bound * 1.02 and current_momentum > 0: signals.iat[i] = 1
             else:
-                ema_alignment = (df['ema_short'].iloc[i] > df['ema_medium'].iloc[i] > df['ema_long'].iloc[i])
+                ema_bullish = (df['ema_short'].iloc[i] > df['ema_medium'].iloc[i] > df['ema_long'].iloc[i])
+                ema_bearish = (df['ema_short'].iloc[i] < df['ema_medium'].iloc[i] < df['ema_long'].iloc[i])
                 if f'fib_0.618' in df.columns and not pd.isna(df[f'fib_0.618'].iloc[i]):
                     fib_618 = df[f'fib_0.618'].iloc[i]
                     if abs(current_price - fib_618) / fib_618 < 0.01:
-                        if ema_alignment and current_momentum > 0: signals.iat[i] = 1
-                        elif not ema_alignment and current_momentum < 0: signals.iat[i] = -1
+                        if ema_bullish and current_momentum > 0: signals.iat[i] = 1
+                        elif ema_bearish and current_momentum < 0: signals.iat[i] = -1
         return signals

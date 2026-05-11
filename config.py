@@ -1,19 +1,23 @@
+# MT5 代理服务配置
+SERVER_HOST = "0.0.0.0"
+SERVER_PORT = 5555
+
+# 远端客户端配置（迁移到其他电脑时填写 MT5 机器的 IP）
+REMOTE_SERVER_HOST = "127.0.0.1"
+REMOTE_SERVER_PORT = 5555
+
 # 交易配置
-SYMBOL = "XAUUSD"
-INTERVAL = 60  # 秒
-INITIAL_CAPITAL = 20000  # 初始资金
-SPREAD = 32  # 点差（点数）,买卖合起来的总共点差成本
+SYMBOL = "XAUUSDz"
+INITIAL_CAPITAL = 1937  # 初始资金（2026-05-11 实盘余额）
 
 # 时间配置
 TIMEFRAME = 1# M1 (1分钟图) - MT5常量值
 
 # 回测时间范围 (格式: "YYYY-MM-DD")
-# 注意：这些日期需要确保在MT5服务器上有可用数据
 BACKTEST_START_DATE = "2025-05-01"
 BACKTEST_END_DATE = "2025-08-01"
 
 # 优化器时间范围 (格式: "YYYY-MM-DD")
-# 注意：确保与回测时间不重叠
 OPTIMIZER_START_DATE = "2025-04-01"
 OPTIMIZER_END_DATE = "2025-05-01"
 
@@ -22,7 +26,7 @@ USE_DATE_RANGE = False  # 设置为False可强制使用数据量模式
 
 # 兼容性配置 (如果日期配置不可用，则使用数据量)
 BACKTEST_COUNT = 30000  # 回测数据量
-OPTIMIZER_COUNT = 15000  # 优化器数据量
+OPTIMIZER_COUNT = 50000  # 优化器数据量
 
 RISK_CONFIG_CONST = {
     'enable_time_based_exit': True
@@ -74,23 +78,23 @@ DATA_CONFIG = {
 # 遗传算法优化器配置
 GENETIC_OPTIMIZER_CONFIG = {
     # 算法参数
-    "population_size": 200,        # 种群大小
-    "generations": 50,           # 进化代数
+    "population_size": 50,         # 种群大小
+    "generations": 10,           # 进化代数
     "crossover_probability": 0.7, # 交叉概率
     "mutation_probability": 0.3,  # 变异概率
-    
+
     # 选择算法参数
     "tournament_size": 3,        # 锦标赛选择大小
-    
+
     # 变异算法参数
     "mutation_mu": 0,            # 变异均值
     "mutation_sigma": 0.1,       # 变异标准差
     "mutation_indpb": 0.1,       # 变异概率（每个基因）
-    
+
     # 并行处理
     "enable_multiprocessing": True,  # 启用多进程
     "processes": None,           # 进程数，None表示自动检测
-    
+
     # 输出控制
     "verbose": True,             # 详细输出
     "save_generation_info": True, # 保存代数信息
@@ -103,131 +107,113 @@ GENETIC_OPTIMIZER_CONFIG = {
 此处下面所有参数，都将进入优化器进行优化
 '''
 
-# 信号阈值配置
+# 信号阈值配置（优化器结果 2026-05-10，5万根M1数据）
 SIGNAL_THRESHOLDS = {
-    "buy_threshold": 1.5,     # 买入信号阈值 (优化后)
-    "sell_threshold": -0.87   # 卖出信号阈值 (优化后)
+    "buy_threshold": 1.344,
+    "sell_threshold": -2.980
 }
 
 
-# 风险管理参数
+# 风险管理参数（优化器结果 2026-05-10，5万根M1数据）
 RISK_CONFIG = {
-    "stop_loss_pct": -0.01,        # 固定止损：亏损1% (优化后)
-    "profit_retracement_pct": 0.1,  # 利润回撤10%止盈 (优化后)
-    "min_profit_for_trailing": 0.01,  # 追踪止损激活阈值：利润0.1% (降低阈值以激活追踪止损)
-    "take_profit_pct": 0.001,         # 固定止盈：盈利0.1% (优化后)
-    "max_position_size": 1,         # 最大仓位100%
-    "max_daily_loss": -0.3,          # 最大日亏损30%
-    "max_holding_minutes": 140,      # 持仓超过140分钟 (优化后)
-    "min_profit_for_time_exit": 0.01, # 且盈利未达到0.1%则平仓 (优化后)
+    "stop_loss_pct": -0.046,
+    "profit_retracement_pct": 0.070,
+    "min_profit_for_trailing": 0.009,
+    "take_profit_pct": 0.246,
+    "max_daily_loss": -0.3,
+    "max_holding_minutes": 133,
+    "min_profit_for_time_exit": 0.010,
+    "cooldown_bars": 30
 }
 
 # 市场状态分析参数
 MARKET_STATE_CONFIG = {
-    "trend_period": 44,
-    "retracement_tolerance": 0.1382775008306345,
-    "volume_period": 13,
-    "volume_ma_period": 12,
+    "trend_period": 24,
+    "retracement_tolerance": 0.425,
+    "volume_period": 21,
+    "volume_ma_period": 12
 }
 
-# 策略参数配置 (从优化器中提取的优化参数)
+# 策略参数配置（优化器结果 2026-05-10，5万根M1数据）
 STRATEGY_CONFIG = {
-    # MACrossStrategy 参数
     "ma_cross": {
-        "short_window": 5,
-        "long_window": 39,
+        "short_window": 12,
+        "long_window": 30
     },
-    
-    # RSIStrategy 参数
     "rsi": {
-        "period": 22,
-        "overbought": 80,
-        "oversold": 24,
+        "period": 21,
+        "overbought": 75,
+        "oversold": 26
     },
-    
-    # BollingerStrategy 参数
     "bollinger": {
-        "period": 10,
-        "std_dev": 2.8916513144581044,
+        "period": 20,
+        "std_dev": 2.162
     },
-    
-    # MACDStrategy 参数
     "macd": {
-        "fast_ema": 17,
-        "slow_ema": 22,
-        "signal_period": 13,
+        "fast_ema": 16,
+        "slow_ema": 34,
+        "signal_period": 12
     },
-    
-    # MeanReversionStrategy 参数
     "mean_reversion": {
-        "period": 40,
-        "std_dev": 2.917216289407233,
+        "period": 29,
+        "std_dev": 2.149
     },
-    
-    # MomentumBreakoutStrategy 参数
     "momentum_breakout": {
-        "period": 27,
+        "period": 15,
+        "momentum_period": 17
     },
-    
-    # KDJStrategy 参数
     "kdj": {
-        "period": 6,
+        "period": 21
     },
-    
-    # TurtleStrategy 参数
     "turtle": {
-        "period": 16,
+        "period": 42
     },
-    
-    # DailyBreakoutStrategy 参数
     "daily_breakout": {
-        "bars_count": 807,
+        "bars_count": 746
     },
-    
-    # WaveTheoryStrategy 参数
     "wave_theory": {
         "ema_short": 3,
-        "ema_medium": 15,
-        "ema_long": 36,
-        "wave_period": 28,
+        "ema_medium": 16,
+        "ema_long": 26,
+        "wave_period": 32,
         "range_period": 30,
-        "adx_period": 21,
-        "momentum_period": 13,
-        "range_threshold": -0.02028040971155598,
-        "adx_threshold": 22,
-    },
+        "adx_period": 23,
+        "momentum_period": 10,
+        "range_threshold": 0.002,
+        "adx_threshold": 23
+    }
 }
 
 # 市场趋势判断权重配置
 TREND_INDICATOR_WEIGHTS = {
-    "price_breakout": 0.03552729699860058,      # 价格突破权重
-    "volume_confirmation": 0.2564191814903339, # 成交量确认权重
-    "momentum oscillator": 0.48690789892001296, # 动量震荡指标权重
-    "moving_average": 0.3549274308680269,     # 移动平均线权重
+    "price_breakout": -0.0949,
+    "volume_confirmation": 0.5277,
+    "momentum oscillator": 0.3677,
+    "moving_average": 0.1506
 }
 
 # 趋势判断阈值
 TREND_THRESHOLDS = {
-    "strong_trend": 0.24063407379490956,         # 强趋势阈值
-    "weak_trend": 0.3708545035763192,           # 弱趋势阈值
-    "volume_spike": 1.7781348694952452,         # 成交量突增倍数
-    "oversold": 29,              # 超卖阈值 (RSI)
-    "overbought": 69,            # 超买阈值 (RSI)
+    "strong_trend": 0.4182,
+    "weak_trend": 0.2164,
+    "volume_spike": 1.5843,
+    "oversold": 24,
+    "overbought": 80
 }
 
 
-# 动态权重配置（经过优化器优化的最佳权重）
+# 动态权重配置（优化器结果 2026-05-10，5万根M1数据）
 DEFAULT_WEIGHTS = {
-    "ma_cross": 0.44428771408324463,
-    "rsi": 1.6518277343219148,
-    "bollinger": 0.6014474871460991,
-    "mean_reversion": 0.04509729271515517,
-    "momentum_breakout": 1.0768245883204248,
-    "macd": 0.8909161638775971,
-    "kdj": 1.095784002572773,
-    "turtle": 1.7942934575029192,
-    "daily_breakout": 2.4237777692491713,
-    "wave_theory": 0.7354173414675755,
+    "ma_cross": 0.809,
+    "rsi": 1.141,
+    "bollinger": 0.389,
+    "mean_reversion": 1.106,
+    "momentum_breakout": 0.147,
+    "macd": 1.181,
+    "kdj": 1.525,
+    "turtle": 0.559,
+    "daily_breakout": 1.846,
+    "wave_theory": 1.361
 }
 
 # 市场状态策略权重配置
@@ -273,7 +259,6 @@ MARKET_STATE_WEIGHTS = {
 
 # 市场趋势置信度阈值配置
 CONFIDENCE_THRESHOLDS = {
-    "high_confidence": 0.941049792261965,       # 高置信度阈值
-    "medium_confidence": 0.8881796011658835,     # 中等置信度阈值
+    "high_confidence": 0.8474,
+    "medium_confidence": 0.4964
 }
-

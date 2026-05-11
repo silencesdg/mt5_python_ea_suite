@@ -2,3 +2,6 @@ MetaTrader5
 pandas
 deap
 tqdm
+fastapi
+uvicorn
+requests

@@ -4,103 +4,106 @@
 
 ## 项目概述
 
-这是一个基于Python的MetaTrader 5智能交易系统(EA)套件，用于量化交易策略。系统通过加权投票和阈值过滤组合多个交易策略，生成稳健的交易决策。
+基于Python的MetaTrader 5智能交易系统(EA)套件，集成10种量化策略，通过加权投票和阈值过滤组合信号，支持动态权重管理（根据市场状态调整策略权重）。
 
-## 架构设计
+## 实际入口点
 
-### 核心组件
+`main.py` 为空壳，实际入口为：
 
-- **主入口**: `main.py` 提供三种执行模式：
-  - `run_backtest()`: 使用当前配置权重进行单次回测
-  - `run_optimizer()`: 遗传算法优化寻找最佳权重
-  - `run_realtime()`: 与MT5集成的实时交易
-
-- **配置文件**: `config.py` 包含：
-  - `STRATEGIES`: (策略实例, 权重) 元组列表
-  - 交易参数（品种、时间周期、初始资金）
-
-- **回测引擎**: `backtest.py` 处理：
-  - 历史数据策略执行
-  - 使用加权和的信号组合
-  - 防止未来函数的收益计算
-
-- **遗传优化器**: `optimizer.py`:
-  - 使用DEAP库进行遗传算法
-  - 优化策略权重以获得最大收益
-  - 支持并行处理提高性能
-
-- **工具函数**: `utils.py` 提供MT5连接管理和交易功能
-- **日志系统**: `logger.py` 处理控制台/文件双日志输出，支持UTF-8编码
-
-### 策略架构
-
-`strategies/` 目录中的所有策略都遵循一致的模式：
-
-```python
-class Strategy:
-    def __init__(self):  # 初始化参数
-    def _calculate_indicators(self, df):  # 计算技术指标
-    def generate_signal(self):  # 实时交易信号生成
-    def run_backtest(self, df):  # 回测信号生成
+```bash
+python start_backtest.py     # 回测模式
+python start_realtime.py     # 实时交易（默认模拟，需输入YES确认实盘）
+python optimizer.py          # 遗传算法参数优化
 ```
+
+## 核心架构
+
+### 依赖注入设计
+
+`core/data_providers.py` 定义了 `DataProvider` 抽象基类（9个抽象方法），三种实现：
+
+- `LiveDataProvider` — 真实MT5 API调用
+- `DryRunDataProvider` — 模拟交易（委托LiveDataProvider获取价格，不发送真实订单）
+- `BacktestDataProvider` — 回测（维护DataFrame + `current_index`，通过 `tick()` 推进）
+
+所有策略和执行模块接收 `DataProvider` 接口，不直接调用MT5。这是理解整个系统解耦的关键。
+
+### 风险管理门面
+
+`core/risk/__init__.py` 中的 `RiskController` 是门面类，组合了：
+- `PositionManager` (`position_manager.py`) — 开仓、监控、止损/止盈/追踪止损/时间退出、资金管理
+- `MarketStateAnalyzer` (`market_state.py`) — 四维度趋势检测（价格突破、成交量确认、动量、均线），返回 `("uptrend"/"downtrend"/"ranging"/"none", confidence)`
+
+### 动态权重系统
+
+`execution/dynamic_weights.py` 中的 `DynamicWeightManager`：
+1. 使用 `MarketStateAnalyzer` 判断当前市场状态
+2. 根据状态从 `config.py:MARKET_STATE_WEIGHTS` 获取对应权重
+3. 按置信度决定使用市场状态权重还是 `DEFAULT_WEIGHTS`
+4. 返回 `[(策略实例, 权重), ...]` 列表供信号组合使用
+
+### 两阶段回测设计
+
+`start_backtest.py` 的回测采用两阶段：
+1. **预生成阶段**：遍历所有策略 `run_backtest(df)` 生成信号列，加权求和后通过 `SIGNAL_THRESHOLDS` 阈值过滤得到最终信号序列
+2. **模拟执行阶段**：单遍 `iterrows` 逐行推进，通过 `RiskController` 模拟开仓/监控/平仓
 
 ### 信号组合逻辑
 
-系统通过以下方式组合策略信号：
-1. 加权求和：`sum(信号 * 权重，针对所有策略)`
-2. 信号决策：加权和大于0买入，小于0卖出
-3. 返回用于回测的组合信号序列
-
-## 开发命令
-
-### 环境设置
-```bash
-# 创建并激活虚拟环境
-python -m venv myenv
-# Windows
-myenv\Scripts\activate
-# macOS/Linux
-source myenv/bin/activate
-
-# 安装依赖
-pip install -r requirements.txt
+```
+加权和 = sum(各策略信号 * 权重)
+最终信号 = 1  (买入)   if 加权和 > buy_threshold (1.5)
+            -1 (卖出)   if 加权和 < sell_threshold (-1.5)
+            0  (无信号)  otherwise
 ```
 
-### 运行模式
-```bash
-# 运行单次回测（使用config.py权重）
-python main.py
+阈值在 `config.py:SIGNAL_THRESHOLDS` 中配置。
 
-# 运行遗传优化（寻找最佳权重）
-python main.py  # 取消注释 run_optimizer() 调用
+## 策略开发规范
 
-# 运行实时交易（使用config.py权重）
-python main.py  # 取消注释 run_realtime() 调用
+所有策略继承 `strategies/base_strategy.py` 的 `BaseStrategy`：
+
+```python
+class BaseStrategy:
+    def __init__(self, data_provider, symbol, timeframe):  # 接收 data_provider 而非直接访问 MT5
+    def generate_signal(self) -> int:    # 实时信号：通过 self.data_provider 获取当前价格
+    def run_backtest(self, df) -> pd.Series:  # 向量化回测：接收 DataFrame，返回 -1/0/1 序列
+    def _log_signal(self, signal, reason):    # 基类提供，记录买卖信号到日志
 ```
 
-## 关键开发模式
+**添加新策略步骤：**
+1. 在 `strategies/` 下创建新文件，继承 `BaseStrategy`
+2. 实现 `generate_signal()` 和 `run_backtest(self, df)`
+3. 在 `config.py:STRATEGY_CONFIG` 添加参数字典，在 `config.py:DEFAULT_WEIGHTS` 和 `config.py:MARKET_STATE_WEIGHTS` 添加权重
+4. 在 `execution/dynamic_weights.py` 的 `strategy_blueprints` 列表和 `optimizer.py` 的导入中注册
 
-### 添加新策略
-1. 在 `strategies/` 目录创建新文件
-2. 实现必需的Strategy类方法
-3. 添加导入和策略实例到 `config.py:STRATEGIES`
+## 配置系统
 
-### 配置管理
-- 策略权重需要从优化器结果手动更新
-- 所有交易参数集中在 `config.py` 中
+`config.py` 包含20+个配置字典，核心：
 
-### 错误处理
-- 策略执行中的全面异常处理
-- 日志文件使用UTF-8编码
-- 操作前进行MT5连接验证
+| 配置 | 用途 |
+|---|---|
+| `SYMBOL`, `TIMEFRAME`, `INITIAL_CAPITAL` | 基础交易参数（当前: XAUUSD, M1, 20000） |
+| `STRATEGY_CONFIG` | 各策略的参数字典（键名为策略简称） |
+| `DEFAULT_WEIGHTS` | 默认策略权重（优化后） |
+| `MARKET_STATE_WEIGHTS` | 各市场状态(up/down/ranging)下的策略权重 |
+| `SIGNAL_THRESHOLDS` | 买卖信号阈值 |
+| `RISK_CONFIG` | 止损/止盈/追踪止损/持仓时间等风控参数 |
+| `MARKET_STATE_CONFIG` | 趋势检测参数 |
+| `GENETIC_OPTIMIZER_CONFIG` | 遗传算法参数（种群、代数、交叉/变异概率） |
+| `BACKTEST_CONFIG` / `REALTIME_CONFIG` | 回测/实盘专项配置 |
 
-### 性能考虑
-- 优化器预加载历史数据避免重复I/O
-- 遗传算法启用并行处理
-- 日志器使用单例模式防止重复处理器
+## 依赖
+
+```
+MetaTrader5  # MT5 Python API
+pandas
+deap         # 遗传算法框架
+tqdm         # 进度条
+```
 
 ## 语言要求
 
-- **所有开发和文档必须使用中文**（根据GEMINI.md）
-- 错误日志在 `logs/error.log`
-- 策略日志在 `logs/strategy.log`
+- 所有代码注释、文档、日志必须使用中文
+- 日志文件: `logs/strategy.log`, `logs/error.log`
+- 日志器使用单例模式（`logger.py`）

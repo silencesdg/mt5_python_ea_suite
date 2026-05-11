@@ -12,7 +12,10 @@ class KDJStrategy(BaseStrategy):
     def _calculate_indicators(self, df):
         low_min = df['low'].rolling(self.period).min()
         high_max = df['high'].rolling(self.period).max()
-        rsv = (df['close'] - low_min) / (high_max - low_min) * 100
+        # 避免除零：当最高价==最低价时，RSV 取 50（中性）
+        price_range = high_max - low_min
+        rsv = (df['close'] - low_min) / price_range.replace(0, float('nan')) * 100
+        rsv = rsv.fillna(50)
         df['k'] = rsv.ewm(com=2).mean()
         df['d'] = df['k'].ewm(com=2).mean()
         df['j'] = 3 * df['k'] - 2 * df['d']

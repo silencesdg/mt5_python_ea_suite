@@ -38,13 +38,22 @@ class DailyBreakoutStrategy(BaseStrategy):
 
     def run_backtest(self, df):
         df = df.copy()
-        df['time'] = pd.to_datetime(df['time'], unit='s')
+        # 'time' 可能是列（来自MT5原始数据）或索引（来自MultiTimeframeDataStore）
+        if 'time' in df.columns:
+            df['time'] = pd.to_datetime(df['time'], unit='s')
+        elif isinstance(df.index, pd.DatetimeIndex):
+            df['time'] = df.index
+        else:
+            df['time'] = pd.to_datetime(df.index, unit='s')
         df['date'] = df['time'].dt.date
         
-        daily_highs = df.groupby('date')['high'].transform('max')
-        daily_lows = df.groupby('date')['low'].transform('max')
+        # 用前一日的最高/最低价作为突破基准，避免未来数据泄露
+        daily_high = df.groupby('date')['high'].max()
+        daily_low = df.groupby('date')['low'].min()
+        prev_high = df['date'].map(daily_high.shift(1))
+        prev_low = df['date'].map(daily_low.shift(1))
 
         signals = pd.Series(0, index=df.index)
-        signals[df['close'] > daily_highs.shift(1)] = 1
-        signals[df['close'] < daily_lows.shift(1)] = -1
+        signals[df['close'] > prev_high] = 1
+        signals[df['close'] < prev_low] = -1
         return signals

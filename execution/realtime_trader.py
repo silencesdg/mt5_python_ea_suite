@@ -5,7 +5,7 @@ from datetime import datetime
 from logger import logger
 from config import SYMBOL, TIMEFRAME, REALTIME_CONFIG, SIGNAL_THRESHOLDS
 from core.risk import RiskController
-from execution.dynamic_weights import DynamicWeightManager
+from execution.weights import DynamicWeightManager
 
 class RealtimeTrader:
     """实时交易器 (已重构为依赖注入)"""

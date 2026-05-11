@@ -18,10 +18,13 @@ class RSIStrategy(BaseStrategy):
 
         df = pd.DataFrame(rates)
         delta = df['close'].diff()
-        gain = (delta.where(delta > 0, 0)).rolling(window=self.period).mean()
-        loss = (-delta.where(delta < 0, 0)).rolling(window=self.period).mean()
-        
-        rs = gain / loss
+        gain = delta.where(delta > 0, 0)
+        loss = -delta.where(delta < 0, 0)
+
+        avg_gain = gain.ewm(com=self.period - 1, min_periods=self.period).mean()
+        avg_loss = loss.ewm(com=self.period - 1, min_periods=self.period).mean()
+
+        rs = avg_gain / avg_loss
         rsi = 100 - (100 / (1 + rs))
         
         latest_rsi = rsi.iloc[-1]
