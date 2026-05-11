@@ -78,19 +78,18 @@ class HedgeManager:
             if any(u["original_ticket"] == ticket for u in self._hedge_units):
                 continue
 
-            # 信号对冲
-            if self.signal_hedge_enabled:
-                reason = self._check_signal_hedge(pos, current_signal)
-                if reason:
-                    if self._can_hedge():
-                        actions.append(("hedge", pos, reason))
+            hedge_reason = None
 
-            # 回撤锁仓
+            # 回撤锁仓优先（更严重的情况）
             if self.drawdown_hedge_enabled:
-                reason = self._check_drawdown_hedge(pos, current_price)
-                if reason:
-                    if self._can_hedge():
-                        actions.append(("hedge", pos, reason))
+                hedge_reason = self._check_drawdown_hedge(pos, current_price)
+
+            # 信号对冲作为补充
+            if not hedge_reason and self.signal_hedge_enabled:
+                hedge_reason = self._check_signal_hedge(pos, current_signal)
+
+            if hedge_reason and self._can_hedge():
+                actions.append(("hedge", pos, hedge_reason))
 
         return actions
 
@@ -194,21 +193,32 @@ class HedgeManager:
 
     def _should_unhedge(self, unit, original_pos, current_signal: float, current_price: dict) -> bool:
         """判断是否应该解锁对冲"""
-        # 条件1：信号回到中性
+        is_drawdown = unit.get("hedge_type") == "drawdown"
+
+        # 条件1：回撤锁仓 → 检查浮亏是否恢复
+        if is_drawdown:
+            price = current_price.get("last", 0)
+            if price > 0:
+                pnl_pct = self._pm._calculate_pnl_pct(original_pos, price)
+                if pnl_pct > self.drawdown_hedge_pct:  # 浮亏回到阈值以上
+                    unit["unhedge_reason"] = f"回撤恢复(浮亏={pnl_pct:.2%} > {self.drawdown_hedge_pct:.2%})"
+                    return True
+
+        # 条件2：信号回到中性 (|signal| < unhedge_threshold)
         if abs(current_signal) < self.signal_unhedge_threshold:
             unit["unhedge_reason"] = f"信号中性({current_signal:.2f})"
             return True
 
-        # 条件2：信号与原始仓位同向
+        # 条件3：信号与原始仓位同向且有足够力度
         is_long = original_pos["position_type"] == "long"
-        if is_long and current_signal > 0:
-            unit["unhedge_reason"] = f"信号同向做多({current_signal:.2f})"
+        if is_long and current_signal > self.signal_unhedge_threshold:
+            unit["unhedge_reason"] = f"信号同向做多({current_signal:.2f} > {self.signal_unhedge_threshold})"
             return True
-        if not is_long and current_signal < 0:
-            unit["unhedge_reason"] = f"信号同向做空({current_signal:.2f})"
+        if not is_long and current_signal < -self.signal_unhedge_threshold:
+            unit["unhedge_reason"] = f"信号同向做空({current_signal:.2f} < -{self.signal_unhedge_threshold})"
             return True
 
-        # 条件3：对冲单自身止盈
+        # 条件4：对冲单自身止盈
         price = current_price.get("last", 0)
         if price > 0 and unit.get("entry_price", 0) > 0:
             if unit["hedge_direction"] == "sell":
