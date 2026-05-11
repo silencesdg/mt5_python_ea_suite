@@ -107,6 +107,17 @@ class HedgeManager:
         ratio = self.signal_hedge_ratio if hedge_type == "signal" else self.drawdown_hedge_ratio
         hedge_volume = position["quantity"] * ratio
 
+        # ★ 手数校验：不能低于最小手数
+        symbol_info = self._pm.data_provider.get_symbol_info(self._pm.symbol)
+        if symbol_info:
+            vol_min = symbol_info.get("volume_min", 0.01) if isinstance(symbol_info, dict) else getattr(symbol_info, "volume_min", 0.01)
+            vol_step = symbol_info.get("volume_step", 0.01) if isinstance(symbol_info, dict) else getattr(symbol_info, "volume_step", 0.01)
+            hedge_volume = max(vol_min, round(hedge_volume / vol_step) * vol_step)
+        else:
+            hedge_volume = max(0.01, hedge_volume)
+
+        logger.info(f"🔒 准备对冲: {opposite} {hedge_volume:.2f}手 | 原因: {reason}")
+
         # 调取开仓
         result = self._pm.data_provider.send_order(
             self._pm.symbol, opposite, hedge_volume
