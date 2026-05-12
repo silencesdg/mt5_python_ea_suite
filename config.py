@@ -87,6 +87,9 @@ HEDGE_CONFIG = {
     # ── 对冲单止盈 ──
     "hedge_take_profit_pct": 0.005,     # 对冲单自身盈利0.5%止盈
 
+    # ── 锁仓管理 ──
+    "lock_net_profit_pct": 0.0,         # 锁仓组合净盈利>0→双平离场
+
     # ── 风控限制 ──
     "max_hedges_per_day": 5,            # 每日最多对冲5次
 }

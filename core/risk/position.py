@@ -242,8 +242,12 @@ class PositionManager:
             for action, target, reason in hedge_actions:
                 if action == "hedge":
                     self.hedge_manager.execute_hedge(target, reason, current_price)
-                elif action == "unhedge":
-                    self.hedge_manager.execute_unhedge(target, reason)
+                elif action == "unhedge_only":
+                    self.hedge_manager.execute_unhedge_only(target, reason)
+                elif action == "close_original":
+                    self.hedge_manager.execute_close_original(target, reason)
+                elif action == "close_both":
+                    self.hedge_manager.execute_close_both(target, reason)
 
     # ── 盈亏计算 ──
 
