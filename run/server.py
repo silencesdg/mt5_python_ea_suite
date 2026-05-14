@@ -68,6 +68,8 @@ class OrderRequest(BaseModel):
     symbol: str
     order_type: str
     volume: float
+    sl: float = None       # ★ 硬止损价格
+    tp: float = None       # ★ 硬止盈价格
 
 class CloseRequest(BaseModel):
     ticket: int
@@ -146,7 +148,8 @@ def api_symbol(symbol: str):
 def api_order(req: OrderRequest):
     _ensure_connected()
     with _lock:
-        result = _provider.send_order(req.symbol, req.order_type, req.volume)
+        result = _provider.send_order(req.symbol, req.order_type, req.volume,
+                                      sl=req.sl, tp=req.tp)
     if result is None:
         return JSONResponse(status_code=503, content={"error": "下单失败"})
     return serialize_order_result(result)

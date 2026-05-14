@@ -37,7 +37,7 @@ class DataProvider(ABC):
         """获取品种信息（合约规格等）"""
 
     @abstractmethod
-    def send_order(self, symbol, order_type, volume):
+    def send_order(self, symbol, order_type, volume, sl=None, tp=None):
         """发送订单"""
 
     @abstractmethod

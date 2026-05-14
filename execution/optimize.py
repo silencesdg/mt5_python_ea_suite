@@ -32,10 +32,12 @@ from config import (
     SYMBOL, TIMEFRAME, OPTIMIZER_COUNT, OPTIMIZER_START_DATE, OPTIMIZER_END_DATE,
     USE_DATE_RANGE, INITIAL_CAPITAL, SIGNAL_THRESHOLDS, DEFAULT_WEIGHTS,
     RISK_CONFIG, GENETIC_OPTIMIZER_CONFIG,
-    MARKET_STATE_CONFIG, TREND_INDICATOR_WEIGHTS, TREND_THRESHOLDS, CONFIDENCE_THRESHOLDS
+    MARKET_STATE_CONFIG, TREND_INDICATOR_WEIGHTS, TREND_THRESHOLDS, CONFIDENCE_THRESHOLDS,
+    DATA_PROVIDER_MODE, REMOTE_SERVER_HOST, REMOTE_SERVER_PORT
 )
 from utils.constants import PERIOD_H1
 from core.utils import get_rates, initialize, shutdown
+from core.data.remote import RemoteDataProvider
 from logger import logger
 
 # 导入策略模块确保 StrategyRegistry 已注册
@@ -45,6 +47,18 @@ import strategies  # noqa: F401
 _multi_tf: MultiTimeframeDataStore | None = None
 _cached_signals: pd.DataFrame | None = None
 _registry: StrategyRegistry | None = None
+
+# MT5 结构化数组 dtype（用于远程 API JSON → numpy 转换）
+_MT5_RATES_DTYPE = np.dtype([
+    ('time', 'i8'),
+    ('open', 'f8'),
+    ('high', 'f8'),
+    ('low', 'f8'),
+    ('close', 'f8'),
+    ('tick_volume', 'i8'),
+    ('spread', 'i4'),
+    ('real_volume', 'i8'),
+])
 
 
 def init_worker():
@@ -397,15 +411,41 @@ def evaluate_fitness(individual, multi_tf: MultiTimeframeDataStore,
     return (total_pnl,)
 
 
+def _json_to_mt5_rates(rates_data):
+    """将远程API JSON rates 转换为 MT5 兼容的 numpy 结构化数组"""
+    if not rates_data:
+        return None
+    records = []
+    for r in rates_data:
+        records.append((
+            r['time'], r['open'], r['high'], r['low'], r['close'],
+            r.get('tick_volume', 0), r.get('spread', 0), r.get('real_volume', 0),
+        ))
+    return np.array(records, dtype=_MT5_RATES_DTYPE)
+
+
 def load_historical_data():
     """一次性加载M1数据并返回 MultiTimeframeDataStore"""
-    initialize()
-    rates = (
-        get_rates(SYMBOL, TIMEFRAME, OPTIMIZER_COUNT, OPTIMIZER_START_DATE, OPTIMIZER_END_DATE)
-        if USE_DATE_RANGE else
-        get_rates(SYMBOL, TIMEFRAME, OPTIMIZER_COUNT)
-    )
-    shutdown()
+    if DATA_PROVIDER_MODE == "remote":
+        provider = RemoteDataProvider(host=REMOTE_SERVER_HOST, port=REMOTE_SERVER_PORT)
+        if not provider.initialize():
+            raise RuntimeError("远程MT5 API初始化失败，请检查 Windows MT5 是否运行")
+
+        rates_json = provider.get_historical_data(SYMBOL, TIMEFRAME, OPTIMIZER_COUNT)
+        provider.shutdown()
+
+        if not rates_json:
+            raise RuntimeError("远程获取历史数据失败")
+
+        rates = _json_to_mt5_rates(rates_json)
+    else:
+        initialize()
+        rates = (
+            get_rates(SYMBOL, TIMEFRAME, OPTIMIZER_COUNT, OPTIMIZER_START_DATE, OPTIMIZER_END_DATE)
+            if USE_DATE_RANGE else
+            get_rates(SYMBOL, TIMEFRAME, OPTIMIZER_COUNT)
+        )
+        shutdown()
 
     if rates is None or len(rates) == 0:
         raise RuntimeError("获取历史数据失败")

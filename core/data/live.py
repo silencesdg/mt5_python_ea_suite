@@ -53,7 +53,7 @@ class LiveDataProvider(DataProvider):
     def get_symbol_info(self, symbol):
         return _get_mt5().symbol_info(symbol)
 
-    def send_order(self, symbol, order_type, volume):
+    def send_order(self, symbol, order_type, volume, sl=None, tp=None):
         price_data = self.get_current_price(symbol)
         if not price_data:
             logger.error(f"无法获取 {symbol} 价格，无法下单")
@@ -92,6 +92,8 @@ class LiveDataProvider(DataProvider):
             "volume": volume,
             "type": order_type_mt5,
             "price": price,
+            "sl": sl or 0.0,       # ★ MT5 硬止损（0=不设）
+            "tp": tp or 0.0,       # ★ MT5 硬止盈
             "deviation": 20,
             "magic": 234000,
             "comment": f"{order_type} order",

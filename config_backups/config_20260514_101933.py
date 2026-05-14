@@ -149,11 +149,7 @@ RISK_CONFIG = {
     "max_daily_loss": -0.3,
     "max_holding_minutes": 133,
     "min_profit_for_time_exit": 0.010,
-    "cooldown_bars": 30,
-    # ★ 硬止损倍率：MT5 服务器端 SL/TP = 软止损 × 倍率（兜底，仅 EA 挂掉时触发）
-    #    硬止损必须比软止损宽（倍率>1），否则会抢先触发导致拖尾失效
-    "hard_sl_multiplier": 1.5,   # 硬 SL = 软 SL × 1.5（例如软-4.6%→硬-6.9%）
-    "hard_tp_multiplier": 1.3,   # 硬 TP = 软 TP × 1.3（例如软+24.6%→硬+32.0%）
+    "cooldown_bars": 30
 }
 
 # 市场状态分析参数

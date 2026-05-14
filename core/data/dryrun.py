@@ -48,7 +48,7 @@ class DryRunDataProvider(DataProvider):
     def get_positions(self, symbol):
         return []
 
-    def send_order(self, symbol, order_type, volume):
+    def send_order(self, symbol, order_type, volume, sl=None, tp=None):
         self.simulated_ticket_counter += 1
         price_data = self.get_current_price(symbol)
         price = price_data['last'] if price_data else "N/A"

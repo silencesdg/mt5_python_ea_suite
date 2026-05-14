@@ -37,14 +37,14 @@ class MACrossStrategy(BaseStrategy):
         is_cross_up = latest['short_ma'] > latest['long_ma'] and previous['short_ma'] <= previous['long_ma']
         logger.debug(f"金叉判断 (is_cross_up): {is_cross_up}")
         if is_cross_up:
-            logger.info(f"{self.name}: 检测到金叉，生成买入信号")
+            logger.debug(f"{self.name}: 检测到金叉，生成买入信号")
             return 1
         
         # 判断死叉
         is_cross_down = latest['short_ma'] < latest['long_ma'] and previous['short_ma'] >= previous['long_ma']
         logger.debug(f"死叉判断 (is_cross_down): {is_cross_down}")
         if is_cross_down:
-            logger.info(f"{self.name}: 检测到死叉，生成卖出信号")
+            logger.debug(f"{self.name}: 检测到死叉，生成卖出信号")
             return -1
             
         logger.debug(f"--- {self.name} 信号生成结束 (无信号) ---")

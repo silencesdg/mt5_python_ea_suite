@@ -8,7 +8,6 @@ from config import (
     RISK_CONFIG_CONST, SIMULATION_CONFIG
 )
 from core.risk.exit_rules import ExitRuleEngine, ExitContext
-from core.risk.hedge import HedgeManager
 
 
 class PositionManager:
@@ -39,6 +38,10 @@ class PositionManager:
         self.enable_time_based_exit = RISK_CONFIG_CONST.get("enable_time_based_exit", False)
         self.max_daily_loss = risk.get("max_daily_loss", -0.30)
 
+        # ★ 硬止损倍率（MT5 服务器端兜底）
+        self.hard_sl_mult = risk.get("hard_sl_multiplier", 1.5)
+        self.hard_tp_mult = risk.get("hard_tp_multiplier", 1.3)
+
         # 资金管理
         self.initial_capital = INITIAL_CAPITAL
         self.long_capital_pct = CAPITAL_ALLOCATION.get("long_pct", 0.5)
@@ -52,6 +55,9 @@ class PositionManager:
         # 冷却期：平仓后N根K线内不重新开仓（防反复进出）
         self.cooldown_bars = risk.get("cooldown_bars", 30)
         self._cooldown_counter = 0
+
+        # 拒单去重：避免连续刷相同拒绝日志
+        self._last_rejected_msg = None
 
         # 退出规则引擎
         exit_config = {
@@ -73,7 +79,12 @@ class PositionManager:
 
         # 对冲管理器
         from config import HEDGE_CONFIG
-        self.hedge_manager = HedgeManager(self, HEDGE_CONFIG)
+        self.hedge_manager = None  # 对冲模块已禁用
+
+        # ★ 一票制并发锁：防止同一周期内多个信号穿透
+        # 开仓前+1，完成后-1，持仓检查时累加 pending 计数
+        self._pending_long = 0
+        self._pending_short = 0
 
     # ── 仓位计算 ──
 
@@ -103,6 +114,18 @@ class PositionManager:
         volume = max(min_volume, min(volume, max_volume))
         return volume
 
+    # ── 去重日志 ──
+
+    def _reject_log(self, msg):
+        """只在首次出现或拒绝原因变化时打印"""
+        if msg != self._last_rejected_msg:
+            logger.info(msg)
+            self._last_rejected_msg = msg
+
+    def _clear_reject_log(self):
+        """开仓成功/平仓后重置去重状态"""
+        self._last_rejected_msg = None
+
     # ── 开仓 ──
 
     def open_position(self, direction, current_price, signal_strength=0.0, dry_run=False):
@@ -123,65 +146,99 @@ class PositionManager:
 
         # 交易方向限制
         if self.trade_direction == "long" and direction == "sell":
-            logger.info("当前配置只允许做多，忽略卖出信号")
+            self._reject_log("当前配置只允许做多，忽略卖出信号")
             return False
         elif self.trade_direction == "short" and direction == "buy":
-            logger.info("当前配置只允许做空，忽略买入信号")
+            self._reject_log("当前配置只允许做空，忽略买入信号")
             return False
 
         # ★ 每日亏损检查（幽灵代码落地）
         current_time = current_price.get('time', pd.Timestamp.now())
         if self._check_max_daily_loss(current_time):
-            logger.warning("当日亏损已达上限，禁止开新仓")
+            self._reject_log("当日亏损已达上限，禁止开新仓")
             return False
 
         # 最大持仓数检查 — 优先使用 risk_config 传入值，回退到 REALTIME_CONFIG
+        # ★ 加入 pending 计数器防并发穿透：同一周期内多信号同时检查时，第一个开仓后
+        #    其 pending 计数会让后续信号看到正确数量，不会误开
         max_key = f'max_{position_type}_positions'
         max_positions = self._risk_config.get(max_key, None)
         if max_positions is None:
             from config import REALTIME_CONFIG
             max_positions = REALTIME_CONFIG.get(max_key, 1)
-        current_count = len([p for p in self.positions if p['position_type'] == position_type])
+        pending_count = self._pending_long if position_type == 'long' else self._pending_short
+        current_count = len([p for p in self.positions if p['position_type'] == position_type]) + pending_count
         if 0 < max_positions <= current_count:
-            logger.info(f"已达到最大{position_type}持仓数 ({max_positions})，忽略信号")
+            self._reject_log(f"已达{position_type}最大持仓({max_positions})，忽略信号")
             return False
 
-        # 资金分配
-        capital_pct = self.long_capital_pct if direction == 'buy' else self.short_capital_pct
-        capital_for_trade = self.total_equity * capital_pct
-
-        position_volume = self._calculate_position_size(capital_for_trade, {'last': execution_price})
-        if position_volume <= 0:
-            logger.info("仓位大小为0，无法开仓")
-            return False
-
-        order_result = self.data_provider.send_order(self.symbol, direction, position_volume)
-        if order_result is None:
-            logger.error("订单返回None")
-            return False
+        # ★ 占位：标记一个 pending 订单，防止并发穿透
+        if position_type == 'long':
+            self._pending_long += 1
+        else:
+            self._pending_short += 1
 
         try:
-            order_id = order_result['order'] if isinstance(order_result, dict) else order_result.order
-        except Exception as e:
-            logger.error(f"解析订单ID失败: {e}")
-            return False
+            # 资金分配
+            capital_pct = self.long_capital_pct if direction == 'buy' else self.short_capital_pct
+            capital_for_trade = self.total_equity * capital_pct
 
-        if order_result and order_id > 0:
-            new_position = {
-                'ticket': order_id,
-                'symbol': self.symbol,
-                'entry_price': execution_price,
-                'entry_time': current_time,
-                'position_type': position_type,
-                'quantity': position_volume,
-                'peak_profit_pct': 0.0,
-            }
-            self.positions.append(new_position)
-            logger.info(f"开仓成功: {direction} @ {execution_price:.2f}, 手数: {position_volume:.2f}, Ticket: {order_id}")
-            return True
-        else:
-            logger.error(f"开仓失败: {direction} @ {execution_price:.2f}")
-            return False
+            position_volume = self._calculate_position_size(capital_for_trade, {'last': execution_price})
+            if position_volume <= 0:
+                self._reject_log("仓位大小为0，无法开仓")
+                return False
+
+            # ★ 计算 MT5 硬止损/硬止盈（兜底安全网）
+            hard_sl_price = None
+            hard_tp_price = None
+            if direction == 'buy':
+                if self.hard_sl_mult > 0:
+                    hard_sl_price = round(execution_price * (1 + self.stop_loss_pct * self.hard_sl_mult), 2)
+                if self.hard_tp_mult > 0:
+                    hard_tp_price = round(execution_price * (1 + self.take_profit_pct * self.hard_tp_mult), 2)
+            else:
+                if self.hard_sl_mult > 0:
+                    hard_sl_price = round(execution_price * (1 - self.stop_loss_pct * self.hard_sl_mult), 2)
+                if self.hard_tp_mult > 0:
+                    hard_tp_price = round(execution_price * (1 - self.take_profit_pct * self.hard_tp_mult), 2)
+
+            order_result = self.data_provider.send_order(
+                self.symbol, direction, position_volume,
+                sl=hard_sl_price, tp=hard_tp_price
+            )
+            if order_result is None:
+                logger.error("订单返回None")
+                return False
+
+            try:
+                order_id = order_result['order'] if isinstance(order_result, dict) else order_result.order
+            except Exception as e:
+                logger.error(f"解析订单ID失败: {e}")
+                return False
+
+            if order_result and order_id > 0:
+                new_position = {
+                    'ticket': order_id,
+                    'symbol': self.symbol,
+                    'entry_price': execution_price,
+                    'entry_time': current_time,
+                    'position_type': position_type,
+                    'quantity': position_volume,
+                    'peak_profit_pct': 0.0,
+                }
+                self.positions.append(new_position)
+                self._clear_reject_log()
+                logger.info(f"开仓成功: {direction} @ {execution_price:.2f}, 手数: {position_volume:.2f}, Ticket: {order_id}")
+                return True
+            else:
+                logger.error(f"开仓失败: {direction} @ {execution_price:.2f}")
+                return False
+        finally:
+            # ★ 释放 pending 占位（无论成功/失败/异常）
+            if position_type == 'long':
+                self._pending_long -= 1
+            else:
+                self._pending_short -= 1
 
     # ── 持仓监控 ──
 
@@ -233,6 +290,7 @@ class PositionManager:
         if positions_to_remove:
             self.positions = [p for p in self.positions if p not in positions_to_remove]
             self._cooldown_counter = self.cooldown_bars
+            self._clear_reject_log()
             self.update_equity()
             self.cleanup_peak_data()
 
@@ -353,8 +411,8 @@ class PositionManager:
                 'peak_profit_pct': restored_peak
             }
             self.positions.append(new_position)
-            logger.info(f"同步持仓 {pos.ticket}: 恢复峰值={restored_peak:.6%}")
-        logger.info(f"持仓已从MT5同步: {len(self.positions)}个")
+        if live_positions:
+            logger.debug(f"MT5同步: {len(self.positions)}个持仓")
         self.update_equity()
 
     # ── 交易摘要 ──

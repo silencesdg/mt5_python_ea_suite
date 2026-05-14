@@ -92,11 +92,16 @@ class RemoteDataProvider(DataProvider):
         except Exception:
             return None
 
-    def send_order(self, symbol, order_type, volume):
+    def send_order(self, symbol, order_type, volume, sl=None, tp=None):
         try:
+            body = {"symbol": symbol, "order_type": order_type, "volume": volume}
+            if sl is not None:
+                body["sl"] = sl
+            if tp is not None:
+                body["tp"] = tp
             resp = self._session.post(
                 f"{self.base_url}/order",
-                json={"symbol": symbol, "order_type": order_type, "volume": volume},
+                json=body,
                 timeout=10,
             )
             if resp.status_code != 200:

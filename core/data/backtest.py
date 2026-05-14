@@ -64,7 +64,7 @@ class BacktestDataProvider(DataProvider):
             symbol, timeframe, count, self.current_index
         )
 
-    def send_order(self, symbol, order_type, volume):
+    def send_order(self, symbol, order_type, volume, sl=None, tp=None):
         self.simulated_ticket_counter += 1
         logger.info(f"[回测模式] 下单: {order_type} {volume:.2f}手 {symbol}")
         return {'order': self.simulated_ticket_counter}

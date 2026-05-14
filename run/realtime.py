@@ -51,6 +51,12 @@ def main():
 
     trader = RealtimeTrader(data_provider, update_interval=REALTIME_CONFIG['update_interval'])
     print("\n正在启动交易系统... (按 Ctrl+C 可安全停止)")
+
+    # 写入 PID 文件供重启脚本使用
+    pid_file = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.ea_pid')
+    with open(pid_file, 'w') as f:
+        f.write(str(os.getpid()))
+
     trader.start()
 
 
