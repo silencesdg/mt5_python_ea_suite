@@ -142,12 +142,14 @@ SIGNAL_THRESHOLDS = {
 
 # 风险管理参数（优化器结果 2026-05-10，5万根M1数据）
 RISK_CONFIG = {
-    # ★ 以下百分比均为账户余额%，非金价涨跌%
-    #    例：余额$1682，-1.5% = -$25 ≈ 25点金价（0.01手）
-    "stop_loss_pct": -0.015,            # -1.5% 账户
-    "profit_retracement_pct": 0.01,     # 1.0% 账户（拖尾回撤容忍）
-    "min_profit_for_trailing": 0.02,    # +2.0% 后激活拖尾
-    "take_profit_pct": 0.03,            # +3.0% 账户
+    # ★ 以下百分比均为保证金%（开仓成本%），非金价涨跌%、非账户%
+    #    risk_leverage 控制计算杠杆：设100则0.01手按$47保证金算%
+    #    例：亏损$25 / 保证金$47 = -53%，而不是 $25/账户$1682=-1.5%
+    "risk_leverage": 100,               # 计算杠杆（实际杠杆不变，仅影响%基准）
+    "stop_loss_pct": -0.50,            # -50% 保证金（亏一半保证金就平）
+    "profit_retracement_pct": 0.35,    # 35% 保证金（拖尾回撤容忍）
+    "min_profit_for_trailing": 0.70,   # +70% 保证金后激活拖尾
+    "take_profit_pct": 1.00,           # +100% 保证金（赚一倍保证金就平）
     "max_daily_loss": -0.3,
     "max_holding_minutes": 133,
     "min_profit_for_time_exit": 0.010,

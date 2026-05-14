@@ -42,6 +42,16 @@ class PositionManager:
         self.hard_sl_mult = risk.get("hard_sl_multiplier", 1.5)
         self.hard_tp_mult = risk.get("hard_tp_multiplier", 1.3)
 
+        # ★ 计算杠杆（仅影响%基准，不改实际杠杆）
+        self.risk_leverage = risk.get("risk_leverage", 0)
+        if self.risk_leverage <= 0:
+            # 未设置则从MT5读取实际杠杆
+            try:
+                acct = self.data_provider.get_account_info()
+                self.risk_leverage = acct.leverage if hasattr(acct, 'leverage') else acct.get('leverage', 2000)
+            except Exception:
+                self.risk_leverage = 2000
+
         # 资金管理
         self.initial_capital = INITIAL_CAPITAL
         self.long_capital_pct = CAPITAL_ALLOCATION.get("long_pct", 0.5)
@@ -189,14 +199,16 @@ class PositionManager:
                 return False
 
             # ★ 计算 MT5 硬止损/硬止盈（兜底安全网）
-            #    公式：账户% × 余额 × 倍率 → 美元 → 金价点数 → 价格
+            #    公式：保证金% × 开仓保证金 × 倍率 → 美元 → 金价点数 → 价格
             hard_sl_price = None
             hard_tp_price = None
             contract_size = self._get_contract_size()
             points_per_dollar = 1.0 / (position_volume * contract_size) if position_volume > 0 else 0
 
-            sl_dollars = abs(self.stop_loss_pct) * self.total_equity * self.hard_sl_mult  # 正数
-            tp_dollars = abs(self.take_profit_pct) * self.total_equity * self.hard_tp_mult
+            # 开仓保证金
+            position_margin = (execution_price * position_volume * contract_size) / self.risk_leverage
+            sl_dollars = abs(self.stop_loss_pct) * position_margin * self.hard_sl_mult  # 正数
+            tp_dollars = abs(self.take_profit_pct) * position_margin * self.hard_tp_mult
             sl_points = sl_dollars * points_per_dollar
             tp_points = tp_dollars * points_per_dollar
 
@@ -330,17 +342,20 @@ class PositionManager:
         return self._cached_contract_size
 
     def _calculate_pnl_pct(self, position, current_price_value):
-        """★ 账户余额百分比盈亏（非金价涨跌%）"""
+        """★ 保证金百分比盈亏 = 美元盈亏 / 开仓保证金"""
         entry_price = position['entry_price']
         quantity = position.get('quantity', 0.01)
         contract_size = self._get_contract_size()
 
+        # 美元盈亏
         if position['position_type'] == 'long':
             dollar_pnl = (current_price_value - entry_price) * quantity * contract_size
         else:
             dollar_pnl = (entry_price - current_price_value) * quantity * contract_size
 
-        return dollar_pnl / self.total_equity if self.total_equity > 0 else 0.0
+        # 开仓保证金 = 合约价值 / 计算杠杆
+        margin = (entry_price * quantity * contract_size) / self.risk_leverage
+        return dollar_pnl / margin if margin > 0 else 0.0
 
     def _calculate_unrealized_pnl(self) -> float:
         """计算所有持仓的浮动盈亏"""
