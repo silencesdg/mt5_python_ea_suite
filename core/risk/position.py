@@ -189,18 +189,27 @@ class PositionManager:
                 return False
 
             # ★ 计算 MT5 硬止损/硬止盈（兜底安全网）
+            #    公式：账户% × 余额 × 倍率 → 美元 → 金价点数 → 价格
             hard_sl_price = None
             hard_tp_price = None
+            contract_size = self._get_contract_size()
+            points_per_dollar = 1.0 / (position_volume * contract_size) if position_volume > 0 else 0
+
+            sl_dollars = abs(self.stop_loss_pct) * self.total_equity * self.hard_sl_mult  # 正数
+            tp_dollars = abs(self.take_profit_pct) * self.total_equity * self.hard_tp_mult
+            sl_points = sl_dollars * points_per_dollar
+            tp_points = tp_dollars * points_per_dollar
+
             if direction == 'buy':
                 if self.hard_sl_mult > 0:
-                    hard_sl_price = round(execution_price * (1 + self.stop_loss_pct * self.hard_sl_mult), 2)
+                    hard_sl_price = round(execution_price - sl_points, 2)
                 if self.hard_tp_mult > 0:
-                    hard_tp_price = round(execution_price * (1 + self.take_profit_pct * self.hard_tp_mult), 2)
+                    hard_tp_price = round(execution_price + tp_points, 2)
             else:
                 if self.hard_sl_mult > 0:
-                    hard_sl_price = round(execution_price * (1 - self.stop_loss_pct * self.hard_sl_mult), 2)
+                    hard_sl_price = round(execution_price + sl_points, 2)
                 if self.hard_tp_mult > 0:
-                    hard_tp_price = round(execution_price * (1 - self.take_profit_pct * self.hard_tp_mult), 2)
+                    hard_tp_price = round(execution_price - tp_points, 2)
 
             order_result = self.data_provider.send_order(
                 self.symbol, direction, position_volume,
@@ -309,25 +318,39 @@ class PositionManager:
 
     # ── 盈亏计算 ──
 
+    def _get_contract_size(self) -> float:
+        """获取合约规格（缓存避免重复API调用）"""
+        if not hasattr(self, '_cached_contract_size'):
+            symbol_info = self.data_provider.get_symbol_info(self.symbol)
+            self._cached_contract_size = (
+                symbol_info['trade_contract_size']
+                if symbol_info and isinstance(symbol_info, dict)
+                else 100
+            ) if symbol_info else 100
+        return self._cached_contract_size
+
     def _calculate_pnl_pct(self, position, current_price_value):
+        """★ 账户余额百分比盈亏（非金价涨跌%）"""
         entry_price = position['entry_price']
+        quantity = position.get('quantity', 0.01)
+        contract_size = self._get_contract_size()
+
         if position['position_type'] == 'long':
-            return (current_price_value - entry_price) / entry_price if entry_price != 0 else 0.0
+            dollar_pnl = (current_price_value - entry_price) * quantity * contract_size
         else:
-            return (entry_price - current_price_value) / entry_price if entry_price != 0 else 0.0
+            dollar_pnl = (entry_price - current_price_value) * quantity * contract_size
+
+        return dollar_pnl / self.total_equity if self.total_equity > 0 else 0.0
 
     def _calculate_unrealized_pnl(self) -> float:
-        """★ 新增：计算所有持仓的浮动盈亏"""
+        """计算所有持仓的浮动盈亏"""
         if not self.positions:
             return 0.0
         current_price_data = self.data_provider.get_current_price(self.symbol)
         if not current_price_data:
             return 0.0
         current_price = current_price_data['last']
-        symbol_info = self.data_provider.get_symbol_info(self.symbol)
-        contract_size = (symbol_info['trade_contract_size']
-                         if symbol_info and isinstance(symbol_info, dict)
-                         else 100) if symbol_info else 100
+        contract_size = self._get_contract_size()
         total = 0.0
         for pos in self.positions:
             if pos['position_type'] == 'long':
@@ -338,10 +361,7 @@ class PositionManager:
         return total
 
     def _record_closed_trade(self, position, close_price, close_reason):
-        symbol_info = self.data_provider.get_symbol_info(position['symbol'])
-        contract_size = (symbol_info['trade_contract_size']
-                         if symbol_info and isinstance(symbol_info, dict)
-                         else 100) if symbol_info else 100
+        contract_size = self._get_contract_size()
         if position['position_type'] == 'long':
             pnl = (close_price - position['entry_price']) * position['quantity'] * contract_size
         else:

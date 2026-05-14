@@ -58,7 +58,8 @@ class TrailingStopRule(BaseExitRule):
         if ctx.peak_profit_pct <= min_profit:
             return "none", ""
 
-        stop_level = ctx.peak_profit_pct * (1 - retracement_pct)
+        # ★ 回撤从峰值绝对值扣除（账户%，非相对%）：峰值+2.0%回撤1.0%→止损在+1.0%
+        stop_level = ctx.peak_profit_pct - retracement_pct
         if ctx.current_profit_pct <= stop_level:
             return "close", (
                 f"追踪止损触发 "

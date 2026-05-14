@@ -135,54 +135,55 @@ GENETIC_OPTIMIZER_CONFIG = {
 
 # 信号阈值配置（优化器结果 2026-05-10，5万根M1数据）
 SIGNAL_THRESHOLDS = {
-    "buy_threshold": 1.344,
-    "sell_threshold": -2.980
+    "buy_threshold": 1.0315663601353515,
+    "sell_threshold": -2.312867704316165
 }
 
 
 # 风险管理参数（优化器结果 2026-05-10，5万根M1数据）
 RISK_CONFIG = {
-    "stop_loss_pct": -0.046,
-    "profit_retracement_pct": 0.030,
-    "min_profit_for_trailing": 0.03,
-    "take_profit_pct": 0.246,
+    # ★ 以下百分比均为账户余额%，非金价涨跌%
+    #    例：余额$1682，-1.5% = -$25 ≈ 25点金价（0.01手）
+    "stop_loss_pct": -0.015,            # -1.5% 账户
+    "profit_retracement_pct": 0.01,     # 1.0% 账户（拖尾回撤容忍）
+    "min_profit_for_trailing": 0.02,    # +2.0% 后激活拖尾
+    "take_profit_pct": 0.03,            # +3.0% 账户
     "max_daily_loss": -0.3,
     "max_holding_minutes": 133,
     "min_profit_for_time_exit": 0.010,
     "cooldown_bars": 30,
     # ★ 硬止损倍率：MT5 服务器端 SL/TP = 软止损 × 倍率（兜底，仅 EA 挂掉时触发）
-    #    硬止损必须比软止损宽（倍率>1），否则会抢先触发导致拖尾失效
-    "hard_sl_multiplier": 1.5,   # 硬 SL = 软 SL × 1.5（例如软-4.6%→硬-6.9%）
-    "hard_tp_multiplier": 1.3,   # 硬 TP = 软 TP × 1.3（例如软+24.6%→硬+32.0%）
+    "hard_sl_multiplier": 1.5,   # 硬 SL = 软 SL × 1.5（-1.5%→-2.25%账户）
+    "hard_tp_multiplier": 1.3,   # 硬 TP = 软 TP × 1.3（+3.0%→+3.9%账户）
 }
 
 # 市场状态分析参数
 MARKET_STATE_CONFIG = {
-    "trend_period": 24,
-    "retracement_tolerance": 0.425,
-    "volume_period": 21,
-    "volume_ma_period": 12
+    "trend_period": 83,
+    "retracement_tolerance": 0.15567164907853615,
+    "volume_period": 29,
+    "volume_ma_period": 23
 }
 
 # 策略参数配置（优化器结果 2026-05-10，5万根M1数据）
 STRATEGY_CONFIG = {
     "ma_cross": {
-        "short_window": 12,
-        "long_window": 30
+        "short_window": 13,
+        "long_window": 17
     },
     "rsi": {
-        "period": 21,
-        "overbought": 75,
-        "oversold": 26
+        "period": 30,
+        "overbought": 68,
+        "oversold": 32
     },
     "bollinger": {
         "period": 20,
-        "std_dev": 2.162
+        "std_dev": 2.4663422649047333
     },
     "macd": {
-        "fast_ema": 16,
-        "slow_ema": 34,
-        "signal_period": 12
+        "fast_ema": 14,
+        "slow_ema": 24,
+        "signal_period": 9
     },
     "mean_reversion": {
         "period": 29,
@@ -190,7 +191,7 @@ STRATEGY_CONFIG = {
     },
     "momentum_breakout": {
         "period": 15,
-        "momentum_period": 17
+        "momentum_period": 13
     },
     "kdj": {
         "period": 21
@@ -199,96 +200,96 @@ STRATEGY_CONFIG = {
         "period": 42
     },
     "daily_breakout": {
-        "bars_count": 746
+        "bars_count": 2008
     },
     "wave_theory": {
         "ema_short": 3,
-        "ema_medium": 16,
-        "ema_long": 26,
-        "wave_period": 32,
-        "range_period": 30,
-        "adx_period": 23,
+        "ema_medium": 11,
+        "ema_long": 46,
+        "wave_period": 11,
+        "range_period": 35,
+        "adx_period": 20,
         "momentum_period": 10,
-        "range_threshold": 0.002,
-        "adx_threshold": 23
+        "range_threshold": 0.01,
+        "adx_threshold": 21
     }
 }
 
 # 市场趋势判断权重配置
 TREND_INDICATOR_WEIGHTS = {
-    "price_breakout": -0.0949,
-    "volume_confirmation": 0.5277,
+    "price_breakout": 0.1504199442999585,
+    "volume_confirmation": 0.12782205952949638,
     "momentum oscillator": 0.3677,
-    "moving_average": 0.1506
+    "moving_average": 0.4092273363154768
 }
 
 # 趋势判断阈值
 TREND_THRESHOLDS = {
-    "strong_trend": 0.4182,
-    "weak_trend": 0.2164,
-    "volume_spike": 1.5843,
-    "oversold": 24,
-    "overbought": 80
+    "strong_trend": 0.7940886082643032,
+    "weak_trend": 0.4565953163045441,
+    "volume_spike": 2.7329673335105396,
+    "oversold": 32,
+    "overbought": 68
 }
 
 
 # 动态权重配置（优化器结果 2026-05-10，5万根M1数据）
 DEFAULT_WEIGHTS = {
-    "ma_cross": 0.809,
-    "rsi": 1.141,
-    "bollinger": 0.389,
-    "mean_reversion": 1.106,
-    "momentum_breakout": 0.147,
-    "macd": 1.181,
-    "kdj": 1.525,
-    "turtle": 0.559,
-    "daily_breakout": 1.846,
-    "wave_theory": 1.361
+    "ma_cross": 0.32048324544087786,
+    "rsi": 1.906009222972592,
+    "bollinger": 0.9232444456662969,
+    "mean_reversion": 1.1649306516234597,
+    "momentum_breakout": 0.8769099086178171,
+    "macd": 0.748930985323352,
+    "kdj": 1.4647470623067596,
+    "turtle": 1.637931136008917,
+    "daily_breakout": 1.478598649389487,
+    "wave_theory": 0.818283180489803
 }
 
 # 市场状态策略权重配置
 MARKET_STATE_WEIGHTS = {
     "uptrend": {
-        "ma_cross": 1.50,
-        "momentum_breakout": 1.20,
-        "turtle": 0.25,
-        "macd": 0.35,
-        "daily_breakout": 1.50,
-        "rsi": 1.00,
-        "bollinger": 1.00,
-        "kdj": 0.40,
-        "mean_reversion": 0.80,
-        "wave_theory": 0.20
+        "ma_cross": 0.32048324544087786,
+        "momentum_breakout": 0.8769099086178171,
+        "turtle": 1.637931136008917,
+        "macd": 0.748930985323352,
+        "daily_breakout": 1.478598649389487,
+        "rsi": 1.906009222972592,
+        "bollinger": 0.9232444456662969,
+        "kdj": 1.4647470623067596,
+        "mean_reversion": 1.1649306516234597,
+        "wave_theory": 0.818283180489803
     },
     "downtrend": {
-        "ma_cross": 1.50,
-        "momentum_breakout": 1.20,
-        "turtle": 0.25,
-        "macd": 0.35,
-        "daily_breakout": 1.50,
-        "rsi": 1.00,
-        "bollinger": 1.00,
-        "kdj": 0.40,
-        "mean_reversion": 0.80,
-        "wave_theory": 0.20
+        "ma_cross": 0.32048324544087786,
+        "momentum_breakout": 0.8769099086178171,
+        "turtle": 1.637931136008917,
+        "macd": 0.748930985323352,
+        "daily_breakout": 1.478598649389487,
+        "rsi": 1.906009222972592,
+        "bollinger": 0.9232444456662969,
+        "kdj": 1.4647470623067596,
+        "mean_reversion": 1.1649306516234597,
+        "wave_theory": 0.818283180489803
     },
     "ranging": {
-        "rsi": 1.60,
-        "bollinger": 1.70,
-        "mean_reversion": 1.50,
-        "kdj": 1.00,
-        "wave_theory": 0.50,
-        "ma_cross": 0.70,
-        "macd": 0.20,
-        "turtle": 0.10,
-        "momentum_breakout": 0.50,
-        "daily_breakout": 0.90
+        "rsi": 1.906009222972592,
+        "bollinger": 0.9232444456662969,
+        "mean_reversion": 1.1649306516234597,
+        "kdj": 1.4647470623067596,
+        "wave_theory": 0.818283180489803,
+        "ma_cross": 0.32048324544087786,
+        "macd": 0.748930985323352,
+        "turtle": 1.637931136008917,
+        "momentum_breakout": 0.8769099086178171,
+        "daily_breakout": 1.478598649389487
     },
     "none": DEFAULT_WEIGHTS
 }
 
 # 市场趋势置信度阈值配置
 CONFIDENCE_THRESHOLDS = {
-    "high_confidence": 0.8474,
-    "medium_confidence": 0.4964
+    "high_confidence": 0.6813641209473742,
+    "medium_confidence": 0.6336441706563001
 }
