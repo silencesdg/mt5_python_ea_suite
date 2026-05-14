@@ -218,9 +218,34 @@ def update_config(best_params: dict):
 
 
 def restart_ea():
-    """通过信号文件通知 restart_ea.sh 重启"""
-    RESTART_SIGNAL.write_text(datetime.now().isoformat())
-    logger.info("📡 已发送重启信号")
+    """杀掉旧 EA → 清日志 → 启动新 EA（应用优化后的配置）"""
+    import subprocess
+    logger.info("🔄 重启 EA...")
+
+    # 杀旧进程
+    subprocess.run(["pkill", "-f", "python.*run/realtime.py"], capture_output=True)
+    import time; time.sleep(2)
+    subprocess.run(["pkill", "-9", "-f", "python.*run/realtime.py"], capture_output=True)
+    time.sleep(1)
+
+    # 清空旧交易记录
+    for f in PROJECT_DIR.glob("realtime_trades_*"):
+        f.unlink(missing_ok=True)
+
+    # 清日志
+    log_file = PROJECT_DIR / "logs" / "strategy.log"
+    log_file.write_text("")
+
+    # 启动新 EA（后台）
+    log = open(log_file, "a")
+    proc = subprocess.Popen(
+        [sys.executable, "run/realtime.py"],
+        cwd=str(PROJECT_DIR),
+        stdout=log, stderr=subprocess.STDOUT,
+    )
+    pid_file = PROJECT_DIR / ".ea_pid"
+    pid_file.write_text(str(proc.pid))
+    logger.info(f"✅ EA 已重启 PID={proc.pid}")
 
 
 def main():

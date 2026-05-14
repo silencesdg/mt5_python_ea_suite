@@ -110,13 +110,13 @@ PARAMETER_DEFINITIONS = [
     # Signal Thresholds
     {'name': 'buy_threshold',  'type': 'float', 'min': 0.5, 'max': 3.0, 'strategy': 'signal'},
     {'name': 'sell_threshold', 'type': 'float', 'min': -3.0, 'max': -0.5, 'strategy': 'signal'},
-    # Risk Management
-    {'name': 'stop_loss_pct',          'type': 'float', 'min': -0.05, 'max': -0.01, 'strategy': 'risk'},
-    {'name': 'profit_retracement_pct', 'type': 'float', 'min': 0.05, 'max': 0.20, 'strategy': 'risk'},
-    {'name': 'min_profit_for_trailing', 'type': 'float', 'min': 0.005, 'max': 0.02, 'strategy': 'risk'},
-    {'name': 'take_profit_pct',        'type': 'float', 'min': 0.10, 'max': 0.50, 'strategy': 'risk'},
+    # Risk Management（范围适配保证金%基准）
+    {'name': 'stop_loss_pct',          'type': 'float', 'min': -1.00, 'max': -0.10, 'strategy': 'risk'},
+    {'name': 'profit_retracement_pct', 'type': 'float', 'min': 0.10, 'max': 0.80, 'strategy': 'risk'},
+    {'name': 'min_profit_for_trailing', 'type': 'float', 'min': 0.30, 'max': 2.00, 'strategy': 'risk'},
+    {'name': 'take_profit_pct',        'type': 'float', 'min': 0.50, 'max': 3.00, 'strategy': 'risk'},
     {'name': 'max_holding_minutes',    'type': 'int', 'min': 30, 'max': 180, 'strategy': 'risk'},
-    {'name': 'min_profit_for_time_exit', 'type': 'float', 'min': 0.002, 'max': 0.01, 'strategy': 'risk'},
+    {'name': 'min_profit_for_time_exit', 'type': 'float', 'min': 0.02, 'max': 0.20, 'strategy': 'risk'},
     # ★ Strategy Weights — 这些基因现在真正影响适应度
     {'name': 'weight_MACrossStrategy', 'type': 'float', 'min': 0.0, 'max': 2.0, 'strategy': 'weight'},
     {'name': 'weight_RSIStrategy', 'type': 'float', 'min': 0.0, 'max': 2.0, 'strategy': 'weight'},
