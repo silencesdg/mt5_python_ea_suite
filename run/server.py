@@ -31,6 +31,21 @@ _provider = LiveDataProvider()
 _lock = threading.Lock()
 
 
+def _ensure_connected():
+    """检查 MT5 连接，断开时自动重连"""
+    import MetaTrader5 as mt5
+    if mt5.terminal_info() is not None:
+        return True
+    logger.warning("MT5 连接已断开，尝试重连...")
+    with _lock:
+        ok = _provider.initialize()
+    if ok:
+        logger.info("MT5 重连成功")
+    else:
+        logger.error("MT5 重连失败")
+    return ok
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     with _lock:
@@ -77,6 +92,7 @@ def api_shutdown():
 
 @app.get("/api/price/{symbol}")
 def api_price(symbol: str):
+    _ensure_connected()
     with _lock:
         data = _provider.get_current_price(symbol)
     if data is None:
@@ -88,6 +104,7 @@ def api_price(symbol: str):
 
 @app.get("/api/historical/{symbol}/{timeframe}/{count}")
 def api_historical(symbol: str, timeframe: int, count: int):
+    _ensure_connected()
     with _lock:
         rates = _provider.get_historical_data(symbol, timeframe, count)
     if rates is None:
@@ -97,6 +114,7 @@ def api_historical(symbol: str, timeframe: int, count: int):
 
 @app.get("/api/account")
 def api_account():
+    _ensure_connected()
     with _lock:
         info = _provider.get_account_info()
     if info is None:
@@ -106,6 +124,7 @@ def api_account():
 
 @app.get("/api/positions/{symbol}")
 def api_positions(symbol: str):
+    _ensure_connected()
     with _lock:
         positions = _provider.get_positions(symbol)
     if positions is None:
@@ -115,6 +134,7 @@ def api_positions(symbol: str):
 
 @app.get("/api/symbol/{symbol}")
 def api_symbol(symbol: str):
+    _ensure_connected()
     with _lock:
         info = _provider.get_symbol_info(symbol)
     if info is None:
@@ -124,6 +144,7 @@ def api_symbol(symbol: str):
 
 @app.post("/api/order")
 def api_order(req: OrderRequest):
+    _ensure_connected()
     with _lock:
         result = _provider.send_order(req.symbol, req.order_type, req.volume)
     if result is None:
@@ -133,6 +154,7 @@ def api_order(req: OrderRequest):
 
 @app.post("/api/close")
 def api_close(req: CloseRequest):
+    _ensure_connected()
     with _lock:
         success = _provider.close_position(req.ticket, req.symbol, req.volume)
     return {"success": success}
