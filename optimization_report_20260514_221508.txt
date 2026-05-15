@@ -1,0 +1,68 @@
+优化完成时间: 2026-05-14 22:15:08.950831
+最佳适应度: 3.33
+
+最佳参数:
+  ma_cross_short_window: 11
+  ma_cross_long_window: 55
+  rsi_period: 11
+  rsi_overbought: 65
+  rsi_oversold: 29
+  bollinger_period: 16
+  bollinger_std_dev: 2.9083950058906556
+  macd_fast_ema: 10
+  macd_slow_ema: 28
+  macd_signal_period: 6
+  mean_reversion_period: 16
+  mean_reversion_std_dev: 2.613625025971498
+  momentum_breakout_period: 19
+  momentum_breakout_momentum_period: 13
+  kdj_period: 14
+  turtle_period: 48
+  wave_ema_short: 6
+  wave_ema_medium: 19
+  wave_ema_long: 30
+  wave_period: 16
+  wave_range_period: 31
+  wave_adx_period: 18
+  wave_momentum_period: 15
+  wave_range_threshold: 0.005908254817195013
+  wave_adx_threshold: 16
+  daily_breakout_bars_count: 1098
+  buy_threshold: 2.0857111182729855
+  sell_threshold: -0.926629776569452
+  stop_loss_pct: -0.960321914380855
+  profit_retracement_pct: 0.33348957702356175
+  min_profit_for_trailing: 0.5223934231928938
+  take_profit_pct: 2.94949488457209
+  max_holding_minutes: 71
+  min_profit_for_time_exit: 0.15342156350262756
+  weight_MACrossStrategy: 1.1033608422527825
+  weight_RSIStrategy: 0.8568676545891594
+  weight_BollingerStrategy: 1.1670658498913125
+  weight_MeanReversionStrategy: 0.7239928874272219
+  weight_MomentumBreakoutStrategy: 1.994651555978322
+  weight_MACDStrategy: 0.27666348978171174
+  weight_KDJStrategy: 0.987031669779262
+  weight_TurtleStrategy: 1.3089542157420992
+  weight_DailyBreakoutStrategy: 1.7222058193333316
+  weight_WaveTheoryStrategy: 0.3056826386965221
+  market_trend_period: 40
+  market_retracement_tolerance: 0.41683174574518567
+  market_volume_period: 37
+  market_volume_ma_period: 24
+  trend_price_breakout_weight: 0.12541108246078286
+  trend_volume_confirmation_weight: 0.2526477146026147
+  trend_momentum_oscillator_weight: 0.4984485520960388
+  trend_moving_average_weight: 0.3116457380396548
+  trend_strong_threshold: 0.6667733642542173
+  trend_weak_threshold: 0.3061035903843855
+  trend_volume_spike: 2.1197670382877396
+  trend_oversold: 33
+  trend_overbought: 79
+  confidence_high: 0.7997910444574157
+  confidence_medium: 0.6703055290278226
+
+代数统计:
+  代数 1: 最佳=3.62, 平均=-0.68
+  代数 2: 最佳=3.62, 平均=1.34
+  代数 3: 最佳=3.33, 平均=1.94
