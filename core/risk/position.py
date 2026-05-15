@@ -45,17 +45,22 @@ class PositionManager:
         # ★ 计算杠杆（仅影响%基准，不改实际杠杆）
         self.risk_leverage = risk.get("risk_leverage", 0)
         if self.risk_leverage <= 0:
-            # 未设置则从MT5读取实际杠杆
             try:
                 acct = self.data_provider.get_account_info()
                 self.risk_leverage = acct.leverage if hasattr(acct, 'leverage') else acct.get('leverage', 2000)
             except Exception:
                 self.risk_leverage = 2000
 
-        # 资金管理
-        self.initial_capital = INITIAL_CAPITAL
-        self.long_capital_pct = CAPITAL_ALLOCATION.get("long_pct", 0.5)
-        self.short_capital_pct = CAPITAL_ALLOCATION.get("short_pct", 0.5)
+        # ★ 杠杆自适应缩放：config 中的 % 以 100x 为基准
+        #    2000x 时倍率 = 20，-50% → -1000% → 美元风险不变
+        self._lev_ratio = self.risk_leverage / 100.0
+
+        # 风险管理参数（已缩放）
+        self.stop_loss_pct = risk.get("stop_loss_pct", -0.10) * self._lev_ratio
+        self.profit_retracement_pct = risk.get("profit_retracement_pct", 0.10) * self._lev_ratio
+        self.min_profit_for_trailing = risk.get("min_profit_for_trailing", 0.01) * self._lev_ratio
+        self.take_profit_pct = risk.get("take_profit_pct", 0.20) * self._lev_ratio
+        self.min_profit_for_time_exit = risk.get("min_profit_for_time_exit", 0.001) * self._lev_ratio
 
         # 持仓和交易记录
         self.positions = []
