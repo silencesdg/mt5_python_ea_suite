@@ -29,13 +29,21 @@ class RealtimeTrader:
         signal.signal(signal.SIGINT, self._signal_handler)
         signal.signal(signal.SIGTERM, self._signal_handler)
 
+        # ★ 杠杆自适应：打印有效值
+        try:
+            acct = self.data_provider.get_account_info()
+            lev = acct.leverage if hasattr(acct, 'leverage') else acct.get('leverage', 2000)
+        except Exception:
+            lev = 2000
+        ratio = lev / 100.0
+
         # ★ 启动参数一览
         logger.info("=" * 50)
-        logger.info(f"品种: {SYMBOL} | 周期: M{TIMEFRAME} | 间隔: {self.update_interval}s")
-        logger.info(f"风控: 止损={RISK_CONFIG['stop_loss_pct']:.1%} | "
-                   f"止盈={RISK_CONFIG['take_profit_pct']:.1%} | "
-                   f"拖尾激活={RISK_CONFIG['min_profit_for_trailing']:.1%} | "
-                   f"拖尾回撤={RISK_CONFIG['profit_retracement_pct']:.1%}")
+        logger.info(f"品种: {SYMBOL} | 周期: M{TIMEFRAME} | 间隔: {self.update_interval}s | 杠杆: {lev}x")
+        logger.info(f"风控: 止损={RISK_CONFIG['stop_loss_pct']*ratio:.1%} | "
+                   f"止盈={RISK_CONFIG['take_profit_pct']*ratio:.1%} | "
+                   f"拖尾激活={RISK_CONFIG['min_profit_for_trailing']*ratio:.1%} | "
+                   f"拖尾回撤={RISK_CONFIG['profit_retracement_pct']*ratio:.1%}")
         logger.info(f"信号: 买入阈值={SIGNAL_THRESHOLDS.get('buy_threshold',1.5)} | "
                    f"卖出阈值={SIGNAL_THRESHOLDS.get('sell_threshold',-1.5)}")
         logger.info(f"仓位: 最多多={REALTIME_CONFIG['max_long_positions']} 最多空={REALTIME_CONFIG['max_short_positions']} | "

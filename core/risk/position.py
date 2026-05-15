@@ -62,6 +62,11 @@ class PositionManager:
         self.take_profit_pct = risk.get("take_profit_pct", 0.20) * self._lev_ratio
         self.min_profit_for_time_exit = risk.get("min_profit_for_time_exit", 0.001) * self._lev_ratio
 
+        # 资金管理
+        self.initial_capital = INITIAL_CAPITAL
+        self.long_capital_pct = CAPITAL_ALLOCATION.get("long_pct", 0.5)
+        self.short_capital_pct = CAPITAL_ALLOCATION.get("short_pct", 0.5)
+
         # 持仓和交易记录
         self.positions = []
         self.closed_trades = []
