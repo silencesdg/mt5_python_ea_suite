@@ -5,7 +5,7 @@ from strategies.rsi import RSIStrategy
 from strategies.bollinger import BollingerStrategy
 from strategies.macd import MACDStrategy
 from strategies.kdj import KDJStrategy
-from strategies.turtle import TurtleStrategy
+from strategies.swing_point import SwingPointRetestStrategy
 from strategies.mean_reversion import MeanReversionStrategy
 from strategies.momentum_breakout import MomentumBreakoutStrategy
 from strategies.daily_breakout import DailyBreakoutStrategy
@@ -18,7 +18,7 @@ _registry.register('rsi', RSIStrategy)
 _registry.register('bollinger', BollingerStrategy)
 _registry.register('macd', MACDStrategy)
 _registry.register('kdj', KDJStrategy)
-_registry.register('turtle', TurtleStrategy)
+_registry.register('swing_point', SwingPointRetestStrategy)
 _registry.register('mean_reversion', MeanReversionStrategy)
 _registry.register('momentum_breakout', MomentumBreakoutStrategy)
 _registry.register('daily_breakout', DailyBreakoutStrategy)

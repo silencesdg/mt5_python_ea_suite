@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 from logger import logger
+import config
 from config import (
     MARKET_STATE_CONFIG, SYMBOL, DEFAULT_WEIGHTS,
     TREND_INDICATOR_WEIGHTS, TREND_THRESHOLDS,
@@ -288,7 +289,7 @@ class MarketStateAnalyzer:
             base_weights = dict(individual_weights)
         else:
             # 正常模式：从配置获取市场状态对应权重
-            base_weights = dict(MARKET_STATE_WEIGHTS.get(market_state, DEFAULT_WEIGHTS))
+            base_weights = dict(config.MARKET_STATE_WEIGHTS.get(market_state, config.DEFAULT_WEIGHTS))
 
         high_conf = self.confidence_thresholds.get("high_confidence", 0.7)
         medium_conf = self.confidence_thresholds.get("medium_confidence", 0.4)
@@ -297,9 +298,9 @@ class MarketStateAnalyzer:
             return {k: v * confidence for k, v in base_weights.items()}
         elif confidence > medium_conf:
             return {
-                k: (v * confidence + DEFAULT_WEIGHTS.get(k, 1.0) * (1 - confidence))
+                k: (v * confidence + config.DEFAULT_WEIGHTS.get(k, 1.0) * (1 - confidence))
                 for k, v in base_weights.items()
             }
         else:
             # 低置信度：individual_weights 优先（优化器模式），否则回退到 DEFAULT_WEIGHTS
-            return dict(individual_weights) if individual_weights is not None else dict(DEFAULT_WEIGHTS)
+            return dict(individual_weights) if individual_weights is not None else dict(config.DEFAULT_WEIGHTS)

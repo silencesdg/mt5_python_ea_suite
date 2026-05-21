@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""每日自动优化 — 遗传算法跑参数 → 写入config → 重启实盘EA
+"""每日自动优化 — 遗传算法跑参数 → 写入config → EA热加载生效（无需重启）
 
 通过 cron 调用: python3 scripts/daily_optimize.py
 """
@@ -22,12 +22,12 @@ RESTART_SIGNAL = PROJECT_DIR / ".restart_signal"
 
 
 def run_optimizer():
-    """运行遗传算法优化，返回 best_params dict"""
+    """运行遗传算法优化，返回 (best_params dict, fitness)"""
     from execution.optimize import run_optimizer as _run
     logger.info("🧬 开始遗传算法优化...")
     best_params, fitness = _run()
     logger.info(f"✅ 优化完成 适应度={fitness:.2f}")
-    return best_params
+    return best_params, fitness
 
 
 def backup_config():
@@ -39,18 +39,13 @@ def backup_config():
     logger.info(f"📦 已备份配置: {dst}")
 
 
-def update_config(best_params: dict):
+def update_config(best_params: dict, fitness: float = 0.0):
     """将优化结果写回 config.py"""
     content = CONFIG_PATH.read_text(encoding="utf-8")
 
-    # ═══ RISK_CONFIG ═══
+    # ═══ RISK_CONFIG — 手动设定，不进优化器 ═══
+    # （optimizer.py PARAM_SPACE 已移除风控基因，此 map 清空）
     risk_map = {
-        "stop_loss_pct": "stop_loss_pct",
-        "profit_retracement_pct": "profit_retracement_pct",
-        "min_profit_for_trailing": "min_profit_for_trailing",
-        "take_profit_pct": "take_profit_pct",
-        "max_holding_minutes": "max_holding_minutes",
-        "min_profit_for_time_exit": "min_profit_for_time_exit",
     }
     for opt_key, cfg_key in risk_map.items():
         if opt_key in best_params:
@@ -115,8 +110,11 @@ def update_config(best_params: dict):
         "momentum_breakout_momentum_period": ("momentum_breakout", "momentum_period"),
         # KDJStrategy
         "kdj_period": ("kdj", "period"),
-        # TurtleStrategy
-        "turtle_period": ("turtle", "period"),
+        # SwingPointRetestStrategy
+        "swing_point_left_bars": ("swing_point", "left_bars"),
+        "swing_point_right_bars": ("swing_point", "right_bars"),
+        "swing_point_tolerance_pct": ("swing_point", "tolerance_pct"),
+        "swing_point_num_swings": ("swing_point", "num_swings"),
         # DailyBreakoutStrategy
         "daily_breakout_bars_count": ("daily_breakout", "bars_count"),
         # WaveTheoryStrategy
@@ -151,7 +149,7 @@ def update_config(best_params: dict):
         "weight_MomentumBreakoutStrategy": "momentum_breakout",
         "weight_MACDStrategy": "macd",
         "weight_KDJStrategy": "kdj",
-        "weight_TurtleStrategy": "turtle",
+        "weight_SwingPointRetestStrategy": "swing_point",
         "weight_DailyBreakoutStrategy": "daily_breakout",
         "weight_WaveTheoryStrategy": "wave_theory",
     }
@@ -213,6 +211,13 @@ def update_config(best_params: dict):
                 content
             )
 
+    # ═══ LAST_OPTIMIZATION_FITNESS ═══
+    content = re.sub(
+        r'LAST_OPTIMIZATION_FITNESS\s*=\s*[\d.\-e]+',
+        f'LAST_OPTIMIZATION_FITNESS = {fitness:.2f}',
+        content
+    )
+
     CONFIG_PATH.write_text(content, encoding="utf-8")
     logger.info("✏️  配置已更新")
 
@@ -222,11 +227,24 @@ def restart_ea():
     import subprocess
     logger.info("🔄 重启 EA...")
 
-    # 杀旧进程
+    # 杀旧进程，等锁释放再启动新的
     subprocess.run(["pkill", "-f", "python.*run/realtime.py"], capture_output=True)
     import time; time.sleep(2)
     subprocess.run(["pkill", "-9", "-f", "python.*run/realtime.py"], capture_output=True)
-    time.sleep(1)
+    # 确认旧进程已死 + 锁已释放（轮询最多等 5 秒）
+    lock_file = PROJECT_DIR / ".ea.lock"
+    import fcntl as _fcntl
+    for _ in range(10):
+        time.sleep(0.5)
+        try:
+            fd = os.open(str(lock_file), os.O_RDONLY)
+            _fcntl.flock(fd, _fcntl.LOCK_EX | _fcntl.LOCK_NB)
+            os.close(fd)  # 立即释放，只是测试
+            break
+        except (BlockingIOError, OSError):
+            pass
+    else:
+        logger.warning("⚠️ 旧进程锁未释放，强制启动（旧进程可能僵死）")
 
     # 清空旧交易记录
     for f in PROJECT_DIR.glob("realtime_trades_*"):
@@ -259,20 +277,18 @@ def main():
 
     # 2. 运行优化
     try:
-        best_params = run_optimizer()
+        best_params, fitness = run_optimizer()
     except Exception as e:
         logger.error(f"优化失败: {e}")
         import traceback
         traceback.print_exc()
         return 1
 
-    # 3. 写入 config.py
-    update_config(best_params)
+    # 3. 写入 config.py（含适应度）
+    update_config(best_params, fitness)
 
-    # 4. 触发重启
-    restart_ea()
-
-    logger.info("✅ 每日优化流程完成")
+    # 4. ★ EA 通过 config.reload() 自动热加载，无需重启
+    logger.info("✅ 每日优化流程完成 (EA 将在下个周期自动读取新配置)")
     return 0
 
 

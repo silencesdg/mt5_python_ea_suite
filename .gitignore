@@ -1,10 +1,17 @@
-/GEMINI.md
-/logs
-/myenv
-__pycache__/
-*.json
-*.csv
-.claude/
-.claude/**
-.claude/settings.local.json
-.claude/
+     1|/GEMINI.md
+     2|/logs
+     3|/myenv
+     4|__pycache__/
+     5|*.json
+     6|*.csv
+     7|.claude/
+     8|.claude/**
+     9|.claude/settings.local.json
+    10|.claude/
+config_backups/
+optimization_report_*.txt
+optimization_results_*.json
+.ea_pid
+.ea.lock
+.hermes/
+realtime_trades_*

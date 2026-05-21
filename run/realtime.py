@@ -4,6 +4,7 @@
 
 import sys
 import os
+import fcntl
 from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -16,8 +17,18 @@ from config import (
 )
 from logger import setup_logger
 
+LOCK_FILE = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), '.ea.lock')
+
 
 def main():
+    # ★ 进程锁：防止多实例同时运行
+    lock_fd = os.open(LOCK_FILE, os.O_CREAT | os.O_RDWR, 0o644)
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        print("❌ 已有 EA 实例在运行，退出")
+        os.close(lock_fd)
+        return
     log_level = REALTIME_CONFIG.get('logging_level', 'INFO')
     setup_logger(log_level)
 

@@ -10,7 +10,7 @@ import strategies  # noqa: F401 — 触发策略注册
 from logger import logger
 from core.risk.market_state import MarketStateAnalyzer
 from core.signal.registry import StrategyRegistry
-from config import SYMBOL, TIMEFRAME
+import config
 
 
 class DynamicWeightManager:
@@ -27,7 +27,7 @@ class DynamicWeightManager:
 
     def _ensure_strategies(self):
         if not self._strategies_initialized:
-            self.registry.instantiate_all(SYMBOL, TIMEFRAME,
+            self.registry.instantiate_all(config.SYMBOL, config.TIMEFRAME,
                                           data_provider=self.data_provider)
             self._strategies_initialized = True
 
@@ -46,7 +46,8 @@ class DynamicWeightManager:
         return result
 
     def get_current_weights(self) -> dict:
-        """获取当前实时权重"""
+        """获取当前实时权重 — ★ 热加载配置"""
+        config.reload()
         market_state, confidence = self.analyzer.get_market_state()
         return self.analyzer.get_strategy_weights(market_state, confidence)
 

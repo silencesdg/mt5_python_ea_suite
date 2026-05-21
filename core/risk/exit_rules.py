@@ -54,15 +54,22 @@ class TrailingStopRule(BaseExitRule):
     def check(self, ctx: ExitContext) -> tuple[str, str]:
         min_profit = self.config.get("min_profit_for_trailing", 0.01)
         retracement_pct = self.config.get("profit_retracement_pct", 0.10)
+        retracement_mode = self.config.get("retracement_mode", "absolute")
 
         if ctx.peak_profit_pct <= min_profit:
             return "none", ""
 
-        # ★ 回撤从峰值绝对值扣除（账户%，非相对%）：峰值+2.0%回撤1.0%→止损在+1.0%
-        stop_level = ctx.peak_profit_pct - retracement_pct
+        if retracement_mode == "relative":
+            # ★ 相对回撤：止损 = 峰值 × (1-回撤%)
+            #   例: 峰值+50% 回撤30% → 止损+35%（利润从50%回落到35%时平仓）
+            stop_level = ctx.peak_profit_pct * (1 - retracement_pct)
+        else:
+            # ★ 绝对值扣除（旧模式）：峰值+2.0%回撤1.0%→止损在+1.0%
+            stop_level = ctx.peak_profit_pct - retracement_pct
         if ctx.current_profit_pct <= stop_level:
+            mode_tag = "相对" if retracement_mode == "relative" else "绝对"
             return "close", (
-                f"追踪止损触发 "
+                f"追踪止损触发({mode_tag}回撤) "
                 f"(峰值 {ctx.peak_profit_pct:.2%} 回落至 {ctx.current_profit_pct:.2%})"
             )
         return "none", ""

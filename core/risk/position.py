@@ -3,10 +3,8 @@ import numpy as np
 import json
 import os
 from logger import logger
-from config import (
-    RISK_CONFIG, SYMBOL, INITIAL_CAPITAL, CAPITAL_ALLOCATION,
-    RISK_CONFIG_CONST, SIMULATION_CONFIG
-)
+import config
+from config import RISK_CONFIG, SYMBOL, INITIAL_CAPITAL, CAPITAL_ALLOCATION, RISK_CONFIG_CONST, SIMULATION_CONFIG
 from core.risk.exit_rules import ExitRuleEngine, ExitContext
 
 
@@ -61,6 +59,7 @@ class PositionManager:
         self.min_profit_for_trailing = risk.get("min_profit_for_trailing", 0.01) * self._lev_ratio
         self.take_profit_pct = risk.get("take_profit_pct", 0.20) * self._lev_ratio
         self.min_profit_for_time_exit = risk.get("min_profit_for_time_exit", 0.001) * self._lev_ratio
+        self.retracement_mode = risk.get("retracement_mode", "absolute")  # relative/absolute
 
         # 资金管理
         self.initial_capital = INITIAL_CAPITAL
@@ -89,13 +88,24 @@ class PositionManager:
             "max_holding_minutes": self.max_holding_minutes,
             "min_profit_for_time_exit": self.min_profit_for_time_exit,
             "max_daily_loss": self.max_daily_loss,
+            "retracement_mode": self.retracement_mode,
         }
         self.exit_engine = ExitRuleEngine(exit_config)
+        self._exit_config = exit_config  # 保存引用，供波动率自适应更新
+
+        # ★ 波动率自适应拖尾 — 保存基准值
+        self._base_min_profit_for_trailing = self.min_profit_for_trailing
+        self._base_profit_retracement_pct = self.profit_retracement_pct
+        self._vol_adaptive = risk.get("vol_adaptive_trailing", False)
+        self._trailing_atr_period = risk.get("trailing_atr_period", 14)
+        self._trailing_atr_baseline = risk.get("trailing_atr_baseline", 100)
+        self._last_atr_update = None  # 节流：最多1分钟更新一次
+        if self._vol_adaptive:
+            logger.info(f"📐 波动率自适应拖尾已启用 (ATR{self._trailing_atr_period}/ATR{self._trailing_atr_baseline})")
 
         # 峰值数据持久化（优化器中禁用文件I/O避免多进程竞争）
         self.peak_data_file = "position_peaks.json"
-        if self._persist_peaks:
-            self._load_peak_data()
+        self._saved_peaks = self._load_peak_data() if self._persist_peaks else {}
 
         # 对冲管理器
         from config import HEDGE_CONFIG
@@ -105,6 +115,54 @@ class PositionManager:
         # 开仓前+1，完成后-1，持仓检查时累加 pending 计数
         self._pending_long = 0
         self._pending_short = 0
+
+    # ── ATR 计算与波动率自适应 ──
+
+    def _compute_atr(self, period: int) -> float | None:
+        """计算指定周期的 ATR（Average True Range）"""
+        try:
+            import numpy as np
+            rates = self.data_provider.get_historical_data(self.symbol, 1, period + 1)
+            if rates is None or len(rates) < period + 1:
+                return None
+            highs = np.array([r[2] for r in rates[-period-1:]])  # high
+            lows = np.array([r[3] for r in rates[-period-1:]])   # low
+            closes = np.array([r[4] for r in rates[-period-1:]]) # close
+            tr = np.maximum(
+                highs[1:] - lows[1:],
+                np.maximum(
+                    np.abs(highs[1:] - closes[:-1]),
+                    np.abs(lows[1:] - closes[:-1])
+                )
+            )
+            return float(np.mean(tr))
+        except Exception as e:
+            logger.debug(f"ATR 计算失败: {e}")
+            return None
+
+    def _update_volatility_trailing(self):
+        """波动率自适应：按 ATR 比率调整拖尾激活和回撤参数"""
+        if not self._vol_adaptive:
+            return
+        # 节流：最多每分钟更新一次
+        from datetime import datetime
+        now = datetime.now()
+        if self._last_atr_update is not None:
+            if (now - self._last_atr_update).total_seconds() < 60:
+                return
+        short_atr = self._compute_atr(self._trailing_atr_period)
+        long_atr = self._compute_atr(self._trailing_atr_baseline)
+        if short_atr is None or long_atr is None or long_atr <= 0:
+            return
+        vol_ratio = short_atr / long_atr
+        # 限制极端值：0.5 ~ 2.0
+        vol_ratio = max(0.5, min(2.0, vol_ratio))
+        # 更新
+        self.min_profit_for_trailing = self._base_min_profit_for_trailing * vol_ratio
+        self.profit_retracement_pct = self._base_profit_retracement_pct * vol_ratio
+        self._exit_config["min_profit_for_trailing"] = self.min_profit_for_trailing
+        self._exit_config["profit_retracement_pct"] = self.profit_retracement_pct
+        self._last_atr_update = now
 
     # ── 仓位计算 ──
 
@@ -277,6 +335,9 @@ class PositionManager:
         if not self.positions:
             return
 
+        # ★ 波动率自适应拖尾 — 每分钟更新一次
+        self._update_volatility_trailing()
+
         current_time = current_price.get('time', pd.Timestamp.now())
 
         positions_to_remove = []
@@ -326,7 +387,7 @@ class PositionManager:
             self.cleanup_peak_data()
 
         # ── 对冲评估 ──
-        if self.positions and self.hedge_manager:
+        if self.positions and hasattr(self, 'hedge_manager') and self.hedge_manager:
             hedge_actions = self.hedge_manager.evaluate(weighted_signal, current_price)
             for action, target, reason in hedge_actions:
                 if action == "hedge":
@@ -441,6 +502,8 @@ class PositionManager:
         if live_positions is None:
             return
         saved_peaks = self._load_peak_data()
+        # 合并构造器中加载的峰值（优先已持久化）
+        saved_peaks = {**saved_peaks, **getattr(self, '_saved_peaks', {})}
         existing_peaks = {pos['ticket']: pos.get('peak_profit_pct', 0.0) for pos in self.positions}
         merged_peaks = {**existing_peaks, **saved_peaks}
         self.positions.clear()
@@ -496,7 +559,9 @@ class PositionManager:
         try:
             if os.path.exists(self.peak_data_file):
                 with open(self.peak_data_file, 'r', encoding='utf-8') as f:
-                    return json.load(f)
+                    raw = json.load(f)
+                # ★ JSON 键是字符串，MT5 ticket 是整数 → 统一转 int
+                return {int(k): v for k, v in raw.items()}
         except Exception as e:
             logger.error(f"加载峰值数据失败: {e}")
         return {}
