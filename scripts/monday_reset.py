@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""开市后清峰值 + 重启 EA（不平仓，让持仓自然运行）"""
+"""开市后重启 EA（不平仓不清理数据，让持仓自然运行）"""
 import time, sys, os, subprocess, requests
 
 API = "http://192.168.1.5:5555/api"
@@ -25,13 +25,7 @@ else:
     log("❌ 等待超时，市场未开市")
     sys.exit(1)
 
-# 2. 清峰值数据（让拖尾从新一周的峰值重新开始）
-peak_file = os.path.join(PROJECT_DIR, "position_peaks.json")
-if os.path.exists(peak_file):
-    os.remove(peak_file)
-    log("✅ 峰值数据已清除")
-
-# 3. 杀掉旧 EA，启动新 EA（新一周用新配置）
+# 2. 杀掉旧 EA，启动新 EA
 subprocess.run(["pkill", "-f", "python.*run/realtime.py"], capture_output=True)
 time.sleep(2)
 subprocess.run(["pkill", "-9", "-f", "python.*run/realtime.py"], capture_output=True)
