@@ -17,6 +17,7 @@ class RealtimeTrader:
         self.risk_controller = None
         self.weight_manager = None
         self._cycle_count = 0
+        self._market_closed_cycles = 0  # 连续检测到市场关闭的周期数
         
     def _initialize(self):
         if not self.data_provider.initialize():
@@ -64,7 +65,23 @@ class RealtimeTrader:
             
             # ★ 热加载配置：cron 优化器改完 config.py 后自动生效
             config.reload()
-            
+
+            # ★ 检测市场关闭：连续 5 分钟 trade_allowed=false → 自动退出
+            try:
+                acct = self.data_provider.get_account_info()
+                if acct and not acct.get('trade_allowed', True):
+                    self._market_closed_cycles += 1
+                    if self._market_closed_cycles == 1:
+                        logger.warning("⚠️ 市场已关闭，等待确认...")
+                    if self._market_closed_cycles >= 60:  # 5分钟@5s间隔
+                        logger.info("🔒 市场关闭已确认，自动退出")
+                        self.stop()
+                        return
+                else:
+                    self._market_closed_cycles = 0
+            except Exception:
+                pass  # API 偶发失败不误判
+
             self.risk_controller.sync_state()
 
             current_price = self.data_provider.get_current_price(config.SYMBOL)
