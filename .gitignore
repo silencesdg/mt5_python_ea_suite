@@ -15,3 +15,4 @@ optimization_results_*.json
 .ea.lock
 .hermes/
 realtime_trades_*
+.optimizer.lock

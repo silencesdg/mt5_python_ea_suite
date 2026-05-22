@@ -267,6 +267,17 @@ def restart_ea():
 
 
 def main():
+    # ★ 单实例锁：防止 cron 每20分钟时上一轮还没跑完
+    import fcntl
+    lock_path = PROJECT_DIR / ".optimizer.lock"
+    lock_fd = os.open(str(lock_path), os.O_CREAT | os.O_RDWR, 0o644)
+    try:
+        fcntl.flock(lock_fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+    except BlockingIOError:
+        logger.warning("⚠️ 上一轮优化仍在运行，跳过本轮")
+        os.close(lock_fd)
+        return 0
+
     logger.info("=" * 60)
     logger.info("📅 每日自动优化启动")
     logger.info(f"时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
